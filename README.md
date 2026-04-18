@@ -10,9 +10,15 @@
 
 [Install](#install) • [How it works](#how-it-works) • [CLI](#cli) • [MCP](#mcp) • [Settings](#settings)
 
-Part of the [Caveman](https://github.com/JuliusBrussee/caveman) ecosystem. Also: [cavekit](https://github.com/JuliusBrussee/cavekit).
-
 </div>
+
+<p align="center">
+  <strong>🪨 Caveman Ecosystem</strong> &nbsp;·&nbsp;
+  <a href="https://github.com/JuliusBrussee/caveman">caveman</a> <em>talk less</em> &nbsp;·&nbsp;
+  <strong>cavemem</strong> <em>remember more</em> <sub>(you are here)</sub> &nbsp;·&nbsp;
+  <a href="https://github.com/JuliusBrussee/cavekit">cavekit</a> <em>build better</em>
+</p>
+
 
 ---
 
@@ -109,10 +115,22 @@ Content inside `<private>...</private>` is stripped before write. Paths matching
 
 ---
 
+## 🪨 The Caveman Ecosystem
+
+Three tools. One philosophy: **agent do more with less**.
+
+| Repo | What | One-liner |
+|------|------|-----------|
+| [**caveman**](https://github.com/JuliusBrussee/caveman) | Output compression skill | *why use many token when few do trick* — ~75% fewer output tokens across Claude Code, Cursor, Gemini, Codex |
+| [**cavemem**](https://github.com/JuliusBrussee/cavemem) *(you are here)* | Cross-agent persistent memory | *why agent forget when agent can remember* — compressed SQLite + MCP, local by default |
+| [**cavekit**](https://github.com/JuliusBrussee/cavekit) | Spec-driven autonomous build loop | *why agent guess when agent can know* — natural language → kits → parallel build → verified |
+
+They compose: **cavekit** orchestrates the build, **caveman** compresses what the agent *says*, **cavemem** compresses what the agent *remembers*. Install one, some, or all — each stands alone.
+
 ## Also by Julius Brussee
 
-- [caveman](https://github.com/JuliusBrussee/caveman) - Claude Code skill, ~75% output token reduction. Powers cavemem compression.
-- [cavekit](https://github.com/JuliusBrussee/cavekit) - spec-driven autonomous build loop, ships caveman by default.
-- [Revu](https://github.com/JuliusBrussee/revu-swift) - local macOS study app, FSRS spaced repetition. [revu.cards](https://revu.cards)
+- [**Revu**](https://github.com/JuliusBrussee/revu-swift) — local-first macOS study app with FSRS spaced repetition. [revu.cards](https://revu.cards)
+
+## License
 
 MIT
