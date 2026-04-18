@@ -7,10 +7,7 @@ import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { renderIndex, renderSession } from './viewer.js';
 
-export async function start(): Promise<void> {
-  const settings = loadSettings();
-  const dbPath = join(resolveDataDir(settings.dataDir), 'data.db');
-  const store = new MemoryStore({ dbPath, settings });
+export function buildApp(store: MemoryStore): Hono {
   const app = new Hono();
 
   app.get('/healthz', (c) => c.json({ ok: true }));
@@ -48,6 +45,14 @@ export async function start(): Promise<void> {
     );
   });
 
+  return app;
+}
+
+export async function start(): Promise<void> {
+  const settings = loadSettings();
+  const dbPath = join(resolveDataDir(settings.dataDir), 'data.db');
+  const store = new MemoryStore({ dbPath, settings });
+  const app = buildApp(store);
   serve({ fetch: app.fetch, port: settings.workerPort, hostname: '127.0.0.1' });
   process.stderr.write(`[cavemem worker] listening on http://127.0.0.1:${settings.workerPort}\n`);
 }

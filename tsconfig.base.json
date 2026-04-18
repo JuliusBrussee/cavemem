@@ -19,7 +19,6 @@
     "declarationMap": true,
     "sourceMap": true,
     "composite": false,
-    "incremental": true,
     "baseUrl": ".",
     "paths": {
       "@cavemem/compress": ["./packages/compress/src/index.ts"],

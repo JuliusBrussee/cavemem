@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { join } from 'node:path';
-import { expand } from '@cavemem/compress';
 import { loadSettings, resolveDataDir } from '@cavemem/config';
 import { MemoryStore } from '@cavemem/core';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -13,11 +12,7 @@ import { z } from 'zod';
  * - timeline: chronological ids around a point
  * - get_observations: full bodies (expanded by default for the model)
  */
-async function main(): Promise<void> {
-  const settings = loadSettings();
-  const dbPath = join(resolveDataDir(settings.dataDir), 'data.db');
-  const store = new MemoryStore({ dbPath, settings });
-
+export function buildServer(store: MemoryStore): McpServer {
   const server = new McpServer({
     name: 'cavemem',
     version: '0.1.0',
@@ -58,25 +53,39 @@ async function main(): Promise<void> {
       expand: z.boolean().optional(),
     },
     async ({ ids, expand: expandOpt }) => {
+      // Expansion happens exactly once, inside MemoryStore.getObservations,
+      // based on the flag we pass. Expanding again here would be wasteful and
+      // would drift the text for any non-idempotent lexicon entry.
       const rows = store.getObservations(ids, { expand: expandOpt ?? true });
       const payload = rows.map((r) => ({
         id: r.id,
         session_id: r.session_id,
         kind: r.kind,
         ts: r.ts,
-        content: expandOpt === false ? r.content : expand(r.content),
+        content: r.content,
         metadata: r.metadata,
       }));
       return { content: [{ type: 'text', text: JSON.stringify(payload) }] };
     },
   );
 
+  return server;
+}
+
+async function main(): Promise<void> {
+  const settings = loadSettings();
+  const dbPath = join(resolveDataDir(settings.dataDir), 'data.db');
+  const store = new MemoryStore({ dbPath, settings });
+
+  const server = buildServer(store);
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
 
-main().catch((err) => {
-  // stderr only — stdout is reserved for the MCP protocol.
-  process.stderr.write(`[cavemem mcp] fatal: ${String(err)}\n`);
-  process.exit(1);
-});
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((err) => {
+    // stderr only — stdout is reserved for the MCP protocol.
+    process.stderr.write(`[cavemem mcp] fatal: ${String(err)}\n`);
+    process.exit(1);
+  });
+}

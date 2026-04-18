@@ -10,25 +10,33 @@ import { registerSearchCommand } from './commands/search.js';
 import { registerUninstallCommand } from './commands/uninstall.js';
 import { registerWorkerCommand } from './commands/worker.js';
 
-const program = new Command();
+export function createProgram(): Command {
+  const program = new Command();
 
-program
-  .name('cavemem')
-  .description('Cross-agent persistent memory with compressed storage.')
-  .version('0.1.0');
+  program
+    .name('cavemem')
+    .description('Cross-agent persistent memory with compressed storage.')
+    .version('0.1.0');
 
-registerInstallCommand(program);
-registerUninstallCommand(program);
-registerDoctorCommand(program);
-registerWorkerCommand(program);
-registerMcpCommand(program);
-registerSearchCommand(program);
-registerCompressCommands(program);
-registerExportCommand(program);
-registerHookCommand(program);
-registerReindexCommand(program);
+  registerInstallCommand(program);
+  registerUninstallCommand(program);
+  registerDoctorCommand(program);
+  registerWorkerCommand(program);
+  registerMcpCommand(program);
+  registerSearchCommand(program);
+  registerCompressCommands(program);
+  registerExportCommand(program);
+  registerHookCommand(program);
+  registerReindexCommand(program);
 
-program.parseAsync(process.argv).catch((err) => {
-  process.stderr.write(`cavemem error: ${err instanceof Error ? err.message : String(err)}\n`);
-  process.exit(1);
-});
+  return program;
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  createProgram()
+    .parseAsync(process.argv)
+    .catch((err) => {
+      process.stderr.write(`cavemem error: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.exit(1);
+    });
+}

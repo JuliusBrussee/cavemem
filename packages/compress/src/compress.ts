@@ -51,14 +51,26 @@ function collapseWhitespace(text: string): string {
 }
 
 function compressProse(text: string, intensity: Intensity): string {
-  let out = text;
+  // Preserve a single boundary space/newline so the seam with adjacent
+  // preserved tokens (paths, inline code, URLs) isn't eaten by
+  // collapseWhitespace's per-line trim — "at /tmp/x" must not become
+  // "at/tmp/x" when compressed.
+  const leadingMatch = text.match(/^\s+/);
+  const trailingMatch = text.match(/\s+$/);
+  const leading = leadingMatch ? leadingMatch[0] : '';
+  const trailing = trailingMatch ? trailingMatch[0] : '';
+  const body = text.slice(leading.length, text.length - trailing.length);
+  if (body.length === 0) return text;
+  let out = body;
   out = removePhrases(out, pleasantriesFor(intensity));
   out = removePhrases(out, hedgesFor(intensity));
   out = removePhrases(out, fillersFor(intensity));
   out = removePhrases(out, articlesFor(intensity));
   out = abbreviate(out, abbreviationsFor(intensity));
   out = collapseWhitespace(out);
-  return out;
+  const leftPad = leading.includes('\n') ? '\n' : leading ? ' ' : '';
+  const rightPad = trailing.includes('\n') ? '\n' : trailing ? ' ' : '';
+  return `${leftPad}${out}${rightPad}`;
 }
 
 /**

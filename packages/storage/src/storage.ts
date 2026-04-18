@@ -83,14 +83,29 @@ export class Storage {
         .prepare('SELECT * FROM observations WHERE session_id = ? ORDER BY ts DESC LIMIT ?')
         .all(sessionId, limit) as ObservationRow[];
     }
-    const half = Math.floor(limit / 2);
-    return this.db
+    // Return up to `limit` rows centred on aroundId — two independent,
+    // bounded queries merged in JS so neither side can starve the other.
+    // A single UNION with a trailing LIMIT would let the "after" half
+    // swallow the whole window.
+    const half = Math.max(1, Math.floor(limit / 2));
+    const before = this.db
       .prepare(
-        `SELECT * FROM (
-           SELECT * FROM observations WHERE session_id = ? AND id <= ? ORDER BY id DESC LIMIT ?
-         ) UNION SELECT * FROM observations WHERE session_id = ? AND id > ? ORDER BY id LIMIT ?`,
+        'SELECT * FROM observations WHERE session_id = ? AND id <= ? ORDER BY id DESC LIMIT ?',
       )
-      .all(sessionId, aroundId, half, sessionId, aroundId, half) as ObservationRow[];
+      .all(sessionId, aroundId, half) as ObservationRow[];
+    const after = this.db
+      .prepare(
+        'SELECT * FROM observations WHERE session_id = ? AND id > ? ORDER BY id ASC LIMIT ?',
+      )
+      .all(sessionId, aroundId, limit - before.length) as ObservationRow[];
+    const seen = new Set<number>();
+    const merged: ObservationRow[] = [];
+    for (const row of [...before.slice().reverse(), ...after]) {
+      if (seen.has(row.id)) continue;
+      seen.add(row.id);
+      merged.push(row);
+    }
+    return merged;
   }
 
   // --- summaries ---

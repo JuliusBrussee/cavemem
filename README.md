@@ -1,194 +1,118 @@
+<div align="center">
+
+![](https://em-content.zobj.net/source/apple/391/rock_1faa8.png)
+
 # cavemem
 
-[![npm](https://img.shields.io/npm/v/cavemem.svg)](https://www.npmjs.com/package/cavemem)
-[![CI](https://github.com/JuliusBrussee/cavemem/actions/workflows/ci.yml/badge.svg)](https://github.com/JuliusBrussee/cavemem/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+**why agent forget when agent can remember**
 
-> Persistent, cross-agent memory for coding assistants. Stored compressed. Retrieved fast. Local by default.
+[![npm](https://img.shields.io/npm/v/cavemem?style=flat&color=yellow)](https://www.npmjs.com/package/cavemem) [![Stars](https://img.shields.io/github/stars/JuliusBrussee/cavemem?style=flat&color=yellow)](https://github.com/JuliusBrussee/cavemem/stargazers) [![Last Commit](https://img.shields.io/github/last-commit/JuliusBrussee/cavemem?style=flat)](https://github.com/JuliusBrussee/cavemem/commits/main) [![License](https://img.shields.io/github/license/JuliusBrussee/cavemem?style=flat)](LICENSE)
 
-cavemem gives AI coding assistants a durable memory that survives sessions, spans IDEs, and does not bloat your prompt budget. Observations are compressed at the storage layer using a deterministic grammar tuned for code and devops prose. Retrieval uses hybrid keyword and vector search with progressive disclosure, so agents pull only what they need.
+[Install](#install) • [How it works](#how-it-works) • [CLI](#cli) • [MCP](#mcp) • [Settings](#settings)
+
+Part of the [Caveman](https://github.com/JuliusBrussee/caveman) ecosystem. Also: [cavekit](https://github.com/JuliusBrussee/cavekit).
+
+</div>
 
 ---
 
-## Why
+Cross-agent persistent memory for coding assistants. Hooks fire at session boundaries, compress observations with the caveman grammar (~75% fewer prose tokens, code and paths preserved byte-for-byte), and write to local SQLite. Agents query their own history through three MCP tools. No network. No cloud.
 
-Agent memory systems typically store verbose text and pay for it on every retrieval. Long-running projects accumulate megabytes of observations, and each prompt drags in far more tokens than the model actually needs.
-
-cavemem attacks this at the source. Every observation is compressed before it touches disk. Technical content — code, paths, URLs, commands, version numbers — is preserved exactly. Only the prose around it is compacted. On the in-repo benchmark corpus at default intensity, stored prose is ~33% smaller in tokens without losing a character of technical substance. Aggressive modes push further.
-
-## Features
+**Supports:** Claude Code · Cursor · Gemini CLI · OpenCode · Codex
 
 - **Persistent memory across sessions.** Hooks capture what happened; the store keeps it.
-- **Compressed at rest.** Deterministic compression via the caveman grammar, with round-trip-guaranteed expansion for humans.
-- **Progressive MCP retrieval.** Three tools — `search`, `timeline`, `get_observations` — let agents filter before fetching.
-- **Hybrid search.** SQLite FTS5 for keyword + local vector index for semantics, combined with a tunable ranker.
-- **Local by default.** No network calls required. Optional remote embedding providers behind a config flag.
-- **Web viewer.** A read-only UI at `http://localhost:37777` for browsing sessions, observations, and summaries in human-readable form.
+- **Compressed at rest.** Deterministic caveman grammar, round-trip-guaranteed expansion for humans.
+- **Progressive MCP retrieval.** `search`, `timeline`, `get_observations` — agents filter before fetching.
+- **Hybrid search.** SQLite FTS5 keyword + local vector index, combined with a tunable ranker.
+- **Local by default.** No network calls. Optional remote embedding providers via config.
+- **Web viewer.** Read-only UI at `http://localhost:37777` for browsing sessions in human-readable form.
 - **Cross-IDE installers.** Claude Code, Gemini CLI, OpenCode, Codex, Cursor — one command each.
-- **Privacy-aware.** `<private>…</private>` tags strip content at the write boundary. Path globs can exclude whole directories.
+- **Privacy-aware.** `<private>...</private>` stripped at write boundary. Path globs exclude whole directories.
+
+---
 
 ## Install
 
-**Requirements**: Node.js ≥ 20.
-
-Install the CLI globally from npm:
-
-```bash
+```sh
 npm install -g cavemem
+cavemem install                    # Claude Code
+cavemem install --ide cursor       # cursor | gemini-cli | opencode | codex
+cavemem doctor                     # verify
 ```
 
-Or use `pnpm add -g cavemem` / `bun add -g cavemem` — whichever you prefer. `npx cavemem <cmd>` also works without a global install.
-
-Then register cavemem with your agent:
-
-```bash
-# Claude Code (default)
-cavemem install
-
-# Other agents
-cavemem install --ide gemini-cli
-cavemem install --ide opencode
-cavemem install --ide codex
-cavemem install --ide cursor
-```
-
-The installer registers lifecycle hooks, adds the MCP server, and writes a default `~/.cavemem/settings.json`. Verify with:
-
-```bash
-cavemem doctor
-```
-
-## Quick start
-
-```bash
-npm install -g cavemem
-cavemem install                # register with Claude Code
-cavemem doctor                 # confirm setup
-cavemem worker start           # launch the local HTTP viewer (optional)
-# ... use your IDE for a coding session ...
-cavemem search "auth middleware"
-open http://localhost:37777    # browse stored memory
-```
-
-## Upgrade
-
-```bash
-npm install -g cavemem@latest
-```
-
-## Uninstall
-
-```bash
-cavemem uninstall              # remove the default (claude-code) integration
-cavemem uninstall --ide cursor # or a specific IDE
-npm uninstall -g cavemem       # remove the CLI itself
-```
+---
 
 ## How it works
 
-```mermaid
-flowchart LR
-  IDE[IDE / Agent] -->|hooks| H[Hook handlers]
-  H -->|enqueue| W[Worker]
-  W -->|compress + index| S[(SQLite + vector)]
-  IDE -->|MCP stdio| M[MCP server]
-  M --> S
-  Viewer[Web viewer] --> W
-  W --> S
+```
+session event  →  redact <private>  →  compress  →  SQLite + FTS5
+                                                           ↑
+                                                MCP queries on demand
 ```
 
-Compression in one line:
+What compression looks like in practice:
 
 ```
-Input:  "The authentication middleware throws a 401 when the session token expires; we should add a refresh path."
+Input:  "The auth middleware throws a 401 when the session token expires; we should add a refresh path."
 Stored: "auth mw throws 401 @ session token expires. add refresh path."
-Viewed: "The auth middleware throws 401 when the session token expires. Add refresh path."
+Viewed: "The auth middleware throws a 401 when session token expires. Add refresh path."
 ```
 
-Code blocks, URLs, paths, commands, dates, and version numbers are never touched.
+Code blocks, URLs, paths, identifiers, and version numbers are never touched. Hook handlers complete in under 150ms. Full bodies fetched on demand via `get_observations`.
 
-## Configuration
+---
 
-`~/.cavemem/settings.json`:
+## CLI
 
-| Key | Default | Description |
-|---|---|---|
-| `dataDir` | `~/.cavemem` | Database and log location |
-| `workerPort` | `37777` | Local HTTP daemon port |
-| `compression.intensity` | `full` | `lite` \| `full` \| `ultra` |
-| `compression.expandForModel` | `false` | Return expanded text to the model instead of compressed |
-| `embedding.provider` | `local` | `local` \| `ollama` \| `openai` |
-| `embedding.model` | `Xenova/all-MiniLM-L6-v2` | Model identifier |
-| `search.alpha` | `0.5` | Hybrid ranker weight; 0 = vector only, 1 = keyword only |
-| `privacy.excludePatterns` | `[]` | Glob patterns never captured |
-| `logLevel` | `info` | `debug` \| `info` \| `warn` \| `error` |
-| `ides` | `{}` | Per-IDE enable/disable flags |
+| Command | |
+|---------|--|
+| `cavemem install [--ide <name>]` | Register hooks + MCP for an IDE |
+| `cavemem uninstall [--ide <name>]` | Remove hooks + MCP |
+| `cavemem doctor` | Verify installation |
+| `cavemem search <query> [--limit N]` | Search memory from terminal |
+| `cavemem compress <file>` | Compress a file with caveman grammar |
+| `cavemem reindex` | Rebuild FTS5 + vector index |
+| `cavemem export <out.jsonl>` | Dump observations to JSONL |
+| `cavemem worker` | Start local viewer (http://127.0.0.1:37777) |
+| `cavemem mcp` | Start MCP server (stdio) |
 
-## CLI reference
+---
 
-```
-cavemem install [--ide <name>]     Register hooks + MCP server
-cavemem uninstall [--ide <name>]   Remove integration
-cavemem doctor                     Run health checks
-cavemem worker start|stop|status   Manage the local daemon
-cavemem mcp                        Run MCP stdio server (usually invoked by the IDE)
-cavemem search <query> [--limit N] Query memory from the terminal
-cavemem compress <file>            Compress a file in place (.original backup)
-cavemem expand <file>              Expand a compressed file
-cavemem export <out.jsonl>         Export memory to JSONL
-cavemem import <in.jsonl>          Import memory from JSONL
-cavemem reindex                    Rebuild FTS and vector indexes
-```
+## MCP
 
-## MCP tools
+Progressive disclosure: `search` and `timeline` return compact results; `get_observations` fetches full bodies.
 
-| Tool | Input | Output |
-|---|---|---|
-| `search` | `{ query, limit? }` | `{ id, score, snippet, session_id, ts }[]` |
-| `timeline` | `{ session_id, around_id?, limit? }` | `{ id, kind, ts }[]` |
-| `get_observations` | `{ ids[], expand? }` | `{ id, content, metadata }[]` |
+| Tool | Returns |
+|------|---------|
+| `search(query, limit?)` | `[{id, score, snippet, session_id, ts}]` |
+| `timeline(session_id, around_id?, limit?)` | `[{id, kind, ts}]` |
+| `get_observations(ids[], expand?)` | Full bodies, expanded by default |
 
-## Compression spec
+---
 
-See [`docs/compression.md`](./docs/compression.md) for the full grammar, intensity levels, and the round-trip guarantee. Benchmarks live in [`evals/`](./evals/).
+## Settings
 
-## Privacy
+`~/.cavemem/settings.json`
 
-- Anything wrapped in `<private>…</private>` is stripped before storage.
-- Paths matching `privacy.excludePatterns` are never read.
-- No telemetry. No network calls unless a remote embedding provider is configured.
-- The worker binds to `127.0.0.1` only.
+| Key | Default | |
+|-----|---------|--|
+| `dataDir` | `"~/.cavemem"` | SQLite location |
+| `compression.intensity` | `"full"` | `lite` / `full` / `ultra` |
+| `compression.expandForModel` | `false` | Return expanded text to model |
+| `embedding.provider` | `"local"` | `local` / `ollama` / `openai` |
+| `workerPort` | `37777` | Local viewer port |
+| `search.alpha` | `0.5` | BM25 / vector blend |
+| `search.defaultLimit` | `10` | Default result count |
+| `privacy.excludePatterns` | `[]` | Paths never captured |
 
-## Architecture
+Content inside `<private>...</private>` is stripped before write. Paths matching `excludePatterns` are never read. The worker binds to `127.0.0.1` only.
 
-Monorepo layout (see [`CLAUDE.md`](./CLAUDE.md) for invariants):
+---
 
-```
-apps/cli apps/worker apps/mcp-server
-packages/config packages/compress packages/storage packages/core packages/hooks packages/installers
-viewer/ hooks-scripts/ docs/ evals/
-```
+## Also by Julius Brussee
 
-## Development
+- [caveman](https://github.com/JuliusBrussee/caveman) - Claude Code skill, ~75% output token reduction. Powers cavemem compression.
+- [cavekit](https://github.com/JuliusBrussee/cavekit) - spec-driven autonomous build loop, ships caveman by default.
+- [Revu](https://github.com/JuliusBrussee/revu-swift) - local macOS study app, FSRS spaced repetition. [revu.cards](https://revu.cards)
 
-```bash
-pnpm install
-pnpm dev                    # CLI + worker in watch mode
-pnpm test                   # vitest across all packages
-pnpm typecheck
-pnpm lint
-pnpm build
-```
-
-Contributions are welcome. New IDEs, compression rules, and MCP tools all have documented extension points. See [`CLAUDE.md`](./CLAUDE.md) for extension points and performance budgets.
-
-## Roadmap
-
-- Encrypted-at-rest storage option.
-- Team sync mode (optional, opt-in, end-to-end encrypted).
-- Additional IDE installers as their hook APIs stabilize.
-- Graph view in the viewer.
-
-## License
-
-MIT. See [LICENSE](./LICENSE).
+MIT

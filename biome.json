@@ -16,6 +16,7 @@
     "rules": {
       "recommended": true,
       "suspicious": { "noExplicitAny": "warn" },
+      "performance": { "noDelete": "off" },
       "style": { "useNodejsImportProtocol": "error" },
       "correctness": { "noUnusedVariables": "warn" }
     }
