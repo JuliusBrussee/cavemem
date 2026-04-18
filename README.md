@@ -29,27 +29,59 @@ cavemem attacks this at the source. Every observation is compressed before it to
 
 ## Install
 
-```bash
-# Claude Code (default)
-npx cavemem install
+**Requirements**: Node.js ≥ 20.
 
-# Other agents
-npx cavemem install --ide gemini-cli
-npx cavemem install --ide opencode
-npx cavemem install --ide codex
-npx cavemem install --ide cursor
+Install the CLI globally from npm:
+
+```bash
+npm install -g cavemem
 ```
 
-The installer registers lifecycle hooks, adds the MCP server, writes a default `~/.cavemem/settings.json`, and starts the local worker.
+Or use `pnpm add -g cavemem` / `bun add -g cavemem` — whichever you prefer. `npx cavemem <cmd>` also works without a global install.
+
+Then register cavemem with your agent:
+
+```bash
+# Claude Code (default)
+cavemem install
+
+# Other agents
+cavemem install --ide gemini-cli
+cavemem install --ide opencode
+cavemem install --ide codex
+cavemem install --ide cursor
+```
+
+The installer registers lifecycle hooks, adds the MCP server, and writes a default `~/.cavemem/settings.json`. Verify with:
+
+```bash
+cavemem doctor
+```
 
 ## Quick start
 
 ```bash
-npx cavemem install
-npx cavemem doctor        # check setup
+npm install -g cavemem
+cavemem install                # register with Claude Code
+cavemem doctor                 # confirm setup
+cavemem worker start           # launch the local HTTP viewer (optional)
 # ... use your IDE for a coding session ...
-npx cavemem search "auth middleware"
-open http://localhost:37777   # browse the viewer
+cavemem search "auth middleware"
+open http://localhost:37777    # browse stored memory
+```
+
+## Upgrade
+
+```bash
+npm install -g cavemem@latest
+```
+
+## Uninstall
+
+```bash
+cavemem uninstall              # remove the default (claude-code) integration
+cavemem uninstall --ide cursor # or a specific IDE
+npm uninstall -g cavemem       # remove the CLI itself
 ```
 
 ## How it works
