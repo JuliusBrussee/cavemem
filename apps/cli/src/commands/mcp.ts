@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import type { Command } from 'commander';
 
 export function registerMcpCommand(program: Command): void {
   program

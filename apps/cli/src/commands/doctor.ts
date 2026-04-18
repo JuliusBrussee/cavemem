@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { Command } from 'commander';
-import kleur from 'kleur';
 import { loadSettings, resolveDataDir, settingsPath } from '@cavemem/config';
 import { Storage } from '@cavemem/storage';
+import type { Command } from 'commander';
+import kleur from 'kleur';
 
 export function registerDoctorCommand(program: Command): void {
   program
@@ -11,7 +11,9 @@ export function registerDoctorCommand(program: Command): void {
     .description('Run health checks')
     .action(async () => {
       const path = settingsPath();
-      process.stdout.write(`settings: ${path} ${existsSync(path) ? kleur.green('ok') : kleur.red('missing')}\n`);
+      process.stdout.write(
+        `settings: ${path} ${existsSync(path) ? kleur.green('ok') : kleur.red('missing')}\n`,
+      );
       const settings = loadSettings();
       const dir = resolveDataDir(settings.dataDir);
       process.stdout.write(`dataDir:  ${dir}\n`);
@@ -27,8 +29,14 @@ export function registerDoctorCommand(program: Command): void {
       }
       process.stdout.write(`port:     ${settings.workerPort}\n`);
       process.stdout.write(`comp:     intensity=${settings.compression.intensity}\n`);
-      process.stdout.write(`embed:    ${settings.embedding.provider} / ${settings.embedding.model}\n`);
-      const enabled = Object.entries(settings.ides).filter(([, v]) => v).map(([k]) => k);
-      process.stdout.write(`ides:     ${enabled.length ? enabled.join(', ') : kleur.dim('none')}\n`);
+      process.stdout.write(
+        `embed:    ${settings.embedding.provider} / ${settings.embedding.model}\n`,
+      );
+      const enabled = Object.entries(settings.ides)
+        .filter(([, v]) => v)
+        .map(([k]) => k);
+      process.stdout.write(
+        `ides:     ${enabled.length ? enabled.join(', ') : kleur.dim('none')}\n`,
+      );
     });
 }

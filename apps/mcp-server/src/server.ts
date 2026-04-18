@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { join } from 'node:path';
+import { expand } from '@cavemem/compress';
 import { loadSettings, resolveDataDir } from '@cavemem/config';
 import { MemoryStore } from '@cavemem/core';
-import { expand } from '@cavemem/compress';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';

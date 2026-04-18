@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { SettingsSchema, type Settings } from './schema.js';
 import { defaultSettings } from './defaults.js';
+import { type Settings, SettingsSchema } from './schema.js';
 
 const DEFAULT_DIR = '.cavemem';
 

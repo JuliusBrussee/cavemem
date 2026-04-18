@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compress, expand, countTokens, redactPrivate, tokenize } from '../src/index.js';
+import { compress, countTokens, expand, redactPrivate, tokenize } from '../src/index.js';
 
 describe('tokenize preserves technical substance', () => {
   it('preserves fenced code', () => {

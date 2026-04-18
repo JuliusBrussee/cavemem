@@ -1,7 +1,6 @@
+import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { Command } from 'commander';
-import kleur from 'kleur';
 import {
   defaultSettings,
   loadSettings,
@@ -9,8 +8,9 @@ import {
   saveSettings,
   settingsPath,
 } from '@cavemem/config';
-import { existsSync } from 'node:fs';
-import { getInstaller, installers, type IdeName } from '@cavemem/installers';
+import { type IdeName, getInstaller, installers } from '@cavemem/installers';
+import type { Command } from 'commander';
+import kleur from 'kleur';
 import { resolveCliPath } from '../util/resolve.js';
 
 export function registerInstallCommand(program: Command): void {

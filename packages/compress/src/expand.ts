@@ -1,5 +1,5 @@
-import { tokenize } from './tokenize.js';
 import { expansions } from './lexicon.js';
+import { tokenize } from './tokenize.js';
 
 function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

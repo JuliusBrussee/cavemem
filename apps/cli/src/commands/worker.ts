@@ -1,9 +1,9 @@
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Command } from 'commander';
-import kleur from 'kleur';
 import { loadSettings, resolveDataDir } from '@cavemem/config';
+import type { Command } from 'commander';
+import kleur from 'kleur';
 import { resolveCliPath } from '../util/resolve.js';
 
 function pidFile(): string {

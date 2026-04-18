@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { compress, countTokens } from '@cavemem/compress';
 
@@ -23,7 +23,9 @@ process.stdout.write(
   `${pad('file', 32)}${pad('before', 10)}${pad('after', 10)}${pad('saved%', 10)}\n`,
 );
 for (const [f, b, a, s] of rows) {
-  process.stdout.write(`${pad(f, 32)}${pad(String(b), 10)}${pad(String(a), 10)}${pad(`${s}%`, 10)}\n`);
+  process.stdout.write(
+    `${pad(f, 32)}${pad(String(b), 10)}${pad(String(a), 10)}${pad(`${s}%`, 10)}\n`,
+  );
 }
 process.stdout.write(
   `\nTOTAL before=${totalBefore} after=${totalAfter} saved=${Math.round(((totalBefore - totalAfter) / totalBefore) * 100)}%\n`,

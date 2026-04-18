@@ -77,7 +77,7 @@ describe('Storage', () => {
     storage.putEmbedding(id, 'test-model', vec);
     const got = storage.getEmbedding(id);
     expect(got?.dim).toBe(3);
-    expect(Array.from(got!.vec)).toEqual([
+    expect(Array.from(got?.vec)).toEqual([
       expect.closeTo(0.1, 5),
       expect.closeTo(0.2, 5),
       expect.closeTo(0.3, 5),

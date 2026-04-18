@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import { join } from 'node:path';
-import { serve } from '@hono/node-server';
-import { Hono } from 'hono';
+import { expand } from '@cavemem/compress';
 import { loadSettings, resolveDataDir } from '@cavemem/config';
 import { MemoryStore } from '@cavemem/core';
-import { expand } from '@cavemem/compress';
+import { serve } from '@hono/node-server';
+import { Hono } from 'hono';
 import { renderIndex, renderSession } from './viewer.js';
 
 export async function start(): Promise<void> {
@@ -40,7 +40,12 @@ export async function start(): Promise<void> {
     const session = store.storage.getSession(id);
     if (!session) return c.notFound();
     const obs = store.timeline(id, undefined, 500);
-    return c.html(renderSession(session, obs.map((r) => ({ ...r, content: expand(r.content) }))));
+    return c.html(
+      renderSession(
+        session,
+        obs.map((r) => ({ ...r, content: expand(r.content) })),
+      ),
+    );
   });
 
   serve({ fetch: app.fetch, port: settings.workerPort, hostname: '127.0.0.1' });

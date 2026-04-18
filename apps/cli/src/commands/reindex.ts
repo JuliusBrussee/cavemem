@@ -1,7 +1,7 @@
 import { join } from 'node:path';
-import { Command } from 'commander';
 import { loadSettings, resolveDataDir } from '@cavemem/config';
 import { Storage } from '@cavemem/storage';
+import type { Command } from 'commander';
 
 export function registerReindexCommand(program: Command): void {
   program

@@ -27,10 +27,7 @@ export function deepMerge<T>(base: T, add: Partial<T>): T {
       typeof v === 'object' &&
       !Array.isArray(v)
     ) {
-      out[k] = deepMerge(
-        existing as Record<string, unknown>,
-        v as Record<string, unknown>,
-      );
+      out[k] = deepMerge(existing as Record<string, unknown>, v as Record<string, unknown>);
     } else {
       out[k] = v;
     }

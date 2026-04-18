@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { Installer, InstallContext } from './types.js';
 import { deepMerge, readJson, writeJson } from './fs-utils.js';
+import type { InstallContext, Installer } from './types.js';
 
 interface GeminiSettings {
   mcpServers?: Record<string, { command: string; args?: string[] }>;
@@ -24,7 +24,7 @@ export const geminiCli: Installer = {
     const current = readJson<GeminiSettings>(path, {});
     const next = deepMerge<GeminiSettings>(current, {
       mcpServers: {
-        'cavemem': { command: ctx.cliPath, args: ['mcp'] },
+        cavemem: { command: ctx.cliPath, args: ['mcp'] },
       },
     });
     writeJson(path, next);
@@ -33,7 +33,7 @@ export const geminiCli: Installer = {
   async uninstall(_ctx): Promise<string[]> {
     const path = settingsFile();
     const current = readJson<GeminiSettings>(path, {});
-    if (current.mcpServers) delete current.mcpServers['cavemem'];
+    if (current.mcpServers) delete current.mcpServers.cavemem;
     writeJson(path, current);
     return [`updated ${path}`];
   },

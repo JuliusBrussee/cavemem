@@ -1,3 +1,3 @@
-import { SettingsSchema, type Settings } from './schema.js';
+import { type Settings, SettingsSchema } from './schema.js';
 
 export const defaultSettings: Settings = SettingsSchema.parse({});

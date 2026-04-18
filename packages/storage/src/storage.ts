@@ -32,9 +32,7 @@ export class Storage {
 
   createSession(s: Omit<SessionRow, 'ended_at'>): void {
     this.db
-      .prepare(
-        'INSERT INTO sessions(id, ide, cwd, started_at, metadata) VALUES (?, ?, ?, ?, ?)',
-      )
+      .prepare('INSERT INTO sessions(id, ide, cwd, started_at, metadata) VALUES (?, ?, ?, ?, ?)')
       .run(s.id, s.ide, s.cwd, s.started_at, s.metadata);
   }
 
@@ -43,9 +41,7 @@ export class Storage {
   }
 
   getSession(id: string): SessionRow | undefined {
-    return this.db.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as
-      | SessionRow
-      | undefined;
+    return this.db.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as SessionRow | undefined;
   }
 
   listSessions(limit = 50): SessionRow[] {
@@ -84,9 +80,7 @@ export class Storage {
   timeline(sessionId: string, aroundId?: number, limit = 50): ObservationRow[] {
     if (aroundId === undefined) {
       return this.db
-        .prepare(
-          'SELECT * FROM observations WHERE session_id = ? ORDER BY ts DESC LIMIT ?',
-        )
+        .prepare('SELECT * FROM observations WHERE session_id = ? ORDER BY ts DESC LIMIT ?')
         .all(sessionId, limit) as ObservationRow[];
     }
     const half = Math.floor(limit / 2);
@@ -172,9 +166,11 @@ export class Storage {
   }
 
   allEmbeddings(): Array<{ observation_id: number; vec: Float32Array }> {
-    const rows = this.db
-      .prepare('SELECT observation_id, dim, vec FROM embeddings')
-      .all() as Array<{ observation_id: number; dim: number; vec: Buffer }>;
+    const rows = this.db.prepare('SELECT observation_id, dim, vec FROM embeddings').all() as Array<{
+      observation_id: number;
+      dim: number;
+      vec: Buffer;
+    }>;
     return rows.map((r) => ({
       observation_id: r.observation_id,
       vec: new Float32Array(r.vec.buffer, r.vec.byteOffset, r.dim),

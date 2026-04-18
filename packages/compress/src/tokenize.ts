@@ -62,18 +62,19 @@ export function tokenize(input: string): Segment[] {
   const spans: Span[] = [];
   for (const rule of RULES) {
     rule.re.lastIndex = 0;
-    let m: RegExpExecArray | null;
-    while ((m = rule.re.exec(input)) !== null) {
+    let m = rule.re.exec(input);
+    while (m !== null) {
       if (m[0].length === 0) {
         rule.re.lastIndex += 1;
-        continue;
+      } else {
+        spans.push({
+          start: m.index,
+          end: m.index + m[0].length,
+          kind: rule.kind,
+          priority: rule.priority,
+        });
       }
-      spans.push({
-        start: m.index,
-        end: m.index + m[0].length,
-        kind: rule.kind,
-        priority: rule.priority,
-      });
+      m = rule.re.exec(input);
     }
   }
   // Resolve overlaps greedily.

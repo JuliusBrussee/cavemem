@@ -1,23 +1,68 @@
 {
   "fillers": {
     "lite": [
-      "basically", "really", "just", "actually", "simply", "literally",
-      "quite", "rather", "very", "kind of", "sort of", "pretty much"
+      "basically",
+      "really",
+      "just",
+      "actually",
+      "simply",
+      "literally",
+      "quite",
+      "rather",
+      "very",
+      "kind of",
+      "sort of",
+      "pretty much"
     ],
     "full": [
-      "basically", "really", "just", "actually", "simply", "literally",
-      "quite", "rather", "very", "kind of", "sort of", "pretty much",
-      "in order to", "it should be noted that", "as a matter of fact",
-      "please note that", "i think that", "i believe that",
-      "it seems that", "it appears that"
+      "basically",
+      "really",
+      "just",
+      "actually",
+      "simply",
+      "literally",
+      "quite",
+      "rather",
+      "very",
+      "kind of",
+      "sort of",
+      "pretty much",
+      "in order to",
+      "it should be noted that",
+      "as a matter of fact",
+      "please note that",
+      "i think that",
+      "i believe that",
+      "it seems that",
+      "it appears that"
     ],
     "ultra": [
-      "basically", "really", "just", "actually", "simply", "literally",
-      "quite", "rather", "very", "kind of", "sort of", "pretty much",
-      "in order to", "it should be noted that", "as a matter of fact",
-      "please note that", "i think that", "i believe that",
-      "it seems that", "it appears that",
-      "perhaps", "possibly", "probably", "generally", "typically", "usually"
+      "basically",
+      "really",
+      "just",
+      "actually",
+      "simply",
+      "literally",
+      "quite",
+      "rather",
+      "very",
+      "kind of",
+      "sort of",
+      "pretty much",
+      "in order to",
+      "it should be noted that",
+      "as a matter of fact",
+      "please note that",
+      "i think that",
+      "i believe that",
+      "it seems that",
+      "it appears that",
+      "perhaps",
+      "possibly",
+      "probably",
+      "generally",
+      "typically",
+      "usually"
     ]
   },
   "articles": {
@@ -28,27 +73,48 @@
   "hedges": {
     "lite": [],
     "full": [
-      "i would recommend", "we should probably", "it might be", "might want to",
-      "could potentially", "may possibly"
+      "i would recommend",
+      "we should probably",
+      "it might be",
+      "might want to",
+      "could potentially",
+      "may possibly"
     ],
     "ultra": [
-      "i would recommend", "we should probably", "it might be", "might want to",
-      "could potentially", "may possibly", "i think", "i believe", "probably",
-      "maybe", "perhaps"
+      "i would recommend",
+      "we should probably",
+      "it might be",
+      "might want to",
+      "could potentially",
+      "may possibly",
+      "i think",
+      "i believe",
+      "probably",
+      "maybe",
+      "perhaps"
     ]
   },
   "pleasantries": {
-    "lite": [
-      "please", "thanks", "thank you", "sorry",
-      "sure", "of course", "no problem"
-    ],
+    "lite": ["please", "thanks", "thank you", "sorry", "sure", "of course", "no problem"],
     "full": [
-      "please", "thanks", "thank you", "sorry",
-      "sure", "of course", "no problem", "happy to help"
+      "please",
+      "thanks",
+      "thank you",
+      "sorry",
+      "sure",
+      "of course",
+      "no problem",
+      "happy to help"
     ],
     "ultra": [
-      "please", "thanks", "thank you", "sorry",
-      "sure", "of course", "no problem", "happy to help"
+      "please",
+      "thanks",
+      "thank you",
+      "sorry",
+      "sure",
+      "of course",
+      "no problem",
+      "happy to help"
     ]
   },
   "abbreviations": {

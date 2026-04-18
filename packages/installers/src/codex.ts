@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { Installer, InstallContext } from './types.js';
 import { deepMerge, readJson, writeJson } from './fs-utils.js';
+import type { InstallContext, Installer } from './types.js';
 
 interface CodexConfig {
   mcpServers?: Record<string, { command: string; args?: string[] }>;
@@ -22,7 +22,7 @@ export const codex: Installer = {
     const path = configFile();
     const current = readJson<CodexConfig>(path, {});
     const next = deepMerge<CodexConfig>(current, {
-      mcpServers: { 'cavemem': { command: ctx.cliPath, args: ['mcp'] } },
+      mcpServers: { cavemem: { command: ctx.cliPath, args: ['mcp'] } },
     });
     writeJson(path, next);
     return [`wrote ${path}`];
@@ -30,7 +30,7 @@ export const codex: Installer = {
   async uninstall(_ctx): Promise<string[]> {
     const path = configFile();
     const current = readJson<CodexConfig>(path, {});
-    if (current.mcpServers) delete current.mcpServers['cavemem'];
+    if (current.mcpServers) delete current.mcpServers.cavemem;
     writeJson(path, current);
     return [`updated ${path}`];
   },

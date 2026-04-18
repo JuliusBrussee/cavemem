@@ -1,7 +1,7 @@
 import { join } from 'node:path';
-import { Command } from 'commander';
 import { loadSettings, resolveDataDir } from '@cavemem/config';
 import { MemoryStore } from '@cavemem/core';
+import type { Command } from 'commander';
 
 export function registerSearchCommand(program: Command): void {
   program

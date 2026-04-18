@@ -1,6 +1,6 @@
 import { compress, expand, redactPrivate } from '@cavemem/compress';
 import type { Settings } from '@cavemem/config';
-import { Storage, type NewObservation, type ObservationRow } from '@cavemem/storage';
+import { type NewObservation, type ObservationRow, Storage } from '@cavemem/storage';
 import { cosine, hybridRank } from './ranker.js';
 import type { GetObservationsOptions, Observation, SearchResult } from './types.js';
 
@@ -107,7 +107,7 @@ export class MemoryStore {
       id: v.observation_id,
       cosine: cosine(qvec, v.vec),
     }));
-    const bmByid = new Map(keyword.map((k) => [k.id, k.score]));
+    const _bmByid = new Map(keyword.map((k) => [k.id, k.score]));
     const merged = new Map<number, { bm25?: number; cosine?: number }>();
     for (const k of keyword) merged.set(k.id, { bm25: k.score });
     for (const s of scored) {

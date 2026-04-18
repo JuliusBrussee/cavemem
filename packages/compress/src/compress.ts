@@ -1,4 +1,3 @@
-import { tokenize, type Segment } from './tokenize.js';
 import {
   abbreviationsFor,
   articlesFor,
@@ -6,13 +5,14 @@ import {
   hedgesFor,
   pleasantriesFor,
 } from './lexicon.js';
+import { type Segment, tokenize } from './tokenize.js';
 import type { Intensity } from './types.js';
 
 export interface CompressOptions {
   intensity?: Intensity;
 }
 
-const WORD_BOUNDARY = /\b/;
+const _WORD_BOUNDARY = /\b/;
 
 function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -27,11 +27,12 @@ function removePhrases(text: string, phrases: string[]): string {
 }
 
 function abbreviate(text: string, map: Record<string, string>): string {
+  let result = text;
   for (const [from, to] of Object.entries(map)) {
     const re = new RegExp(`\\b${escapeRe(from)}\\b`, 'gi');
-    text = text.replace(re, (match) => matchCase(match, to));
+    result = result.replace(re, (match) => matchCase(match, to));
   }
-  return text;
+  return result;
 }
 
 function matchCase(source: string, target: string): string {

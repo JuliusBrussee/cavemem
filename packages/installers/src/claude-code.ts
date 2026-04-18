@@ -1,11 +1,14 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { Installer, InstallContext } from './types.js';
 import { deepMerge, readJson, writeJson } from './fs-utils.js';
+import type { InstallContext, Installer } from './types.js';
 
 interface ClaudeSettings {
-  hooks?: Record<string, Array<{ matcher?: string; hooks: Array<{ type: string; command: string }> }>>;
+  hooks?: Record<
+    string,
+    Array<{ matcher?: string; hooks: Array<{ type: string; command: string }> }>
+  >;
   mcpServers?: Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
 }
 
@@ -45,7 +48,7 @@ export const claudeCode: Installer = {
     }
     const mcpServers = {
       ...(current.mcpServers ?? {}),
-      'cavemem': {
+      cavemem: {
         command: ctx.cliPath,
         args: ['mcp'],
       },
@@ -60,7 +63,7 @@ export const claudeCode: Installer = {
     if (current.hooks) {
       for (const [claudeName] of HOOK_NAMES) delete current.hooks[claudeName];
     }
-    if (current.mcpServers) delete current.mcpServers['cavemem'];
+    if (current.mcpServers) delete current.mcpServers.cavemem;
     writeJson(path, current);
     return [`updated ${path}`];
   },
