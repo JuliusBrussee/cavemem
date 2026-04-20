@@ -1,6 +1,6 @@
 {
   "name": "@cavemem/compress",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -15,7 +15,10 @@
       "import": "./dist/lexicon.js"
     }
   },
-  "files": ["dist", "src/lexicon.json"],
+  "files": [
+    "dist",
+    "src/lexicon.json"
+  ],
   "scripts": {
     "build": "tsup src/index.ts src/lexicon.ts --format esm --dts --clean",
     "dev": "tsup src/index.ts src/lexicon.ts --format esm --dts --watch",
