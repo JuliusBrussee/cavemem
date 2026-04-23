@@ -3,6 +3,10 @@
     ".omx/agent-worktrees",
     "**/.omx/agent-worktrees",
     ".omc/agent-worktrees",
-    "**/.omc/agent-worktrees"
+    "**/.omc/agent-worktrees",
+    ".omx/.tmp-worktrees",
+    "**/.omx/.tmp-worktrees",
+    ".omc/.tmp-worktrees",
+    "**/.omc/.tmp-worktrees"
   ]
 }

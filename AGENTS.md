@@ -23,8 +23,11 @@ Default: less word, same proof.
 - Front-load scaffold/path discovery into one grouped inspection pass. Avoid serial `ls` / `find` / `rg` / `cat` retries that only rediscover the same path state.
 - Treat repeated `write_stdin`, repeated `sed` / `cat` peeks, and tiny diagnostic follow-up checks as strong negative signals. If they appear alongside climbing input cost, stop the probe loop and batch the next phase.
 - Tool / hook summaries stay tiny: command, status, last meaningful lines only. Drop routine hook boilerplate.
+- Keep raw terminal interaction out of long-lived context. For `write_stdin` or interactive babysitting, retain only process, action sent, current result, and next action.
+- Keep execution log separate from reasoning context: full commands/stdout belong in logs, while prompt context keeps only the latest 1-2 checkpoints plus the newest tool-result summary.
 - Treat local edit/commit, remote publish/PR, CI diagnosis, and cleanup as bounded phases. Do not spend fresh narration or approval turns on obvious safe follow-ons inside an already authorized phase unless the risk changes.
 - When a session turns fragmented, collapse back to inspect once, patch once, verify once, and summarize once.
+- Use a fixed checkpoint shape when compacting: `Task`, `Done`, `Current status`, and `Next`.
 - Keep `.omx/notepad.md` lean: live handoffs only. Use exactly `branch`, `task`, `blocker`, `next step`, and `evidence`; move narrative proof into OpenSpec artifacts, PRs, or command output.
 
 ## OMX Caveman Style

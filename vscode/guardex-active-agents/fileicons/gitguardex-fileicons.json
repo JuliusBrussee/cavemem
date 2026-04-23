@@ -1,0 +1,54 @@
+{
+  "iconDefinitions": {
+    "_gitguardex_agent": {
+      "iconPath": "./icons/agent.svg"
+    },
+    "_gitguardex_branch": {
+      "iconPath": "./icons/branch.svg"
+    },
+    "_gitguardex_config": {
+      "iconPath": "./icons/config.svg"
+    },
+    "_gitguardex_hook": {
+      "iconPath": "./icons/hook.svg"
+    },
+    "_gitguardex_openspec": {
+      "iconPath": "./icons/openspec.svg"
+    },
+    "_gitguardex_plan": {
+      "iconPath": "./icons/plan.svg"
+    },
+    "_gitguardex_spec": {
+      "iconPath": "./icons/spec.svg"
+    }
+  },
+  "folderNames": {
+    ".agents": "_gitguardex_agent",
+    ".githooks": "_gitguardex_hook",
+    ".omc": "_gitguardex_agent",
+    ".omx": "_gitguardex_agent",
+    "agent-worktrees": "_gitguardex_branch",
+    "changes": "_gitguardex_openspec",
+    "plan": "_gitguardex_plan",
+    "rules": "_gitguardex_spec",
+    "specs": "_gitguardex_spec"
+  },
+  "fileNames": {
+    ".openspec.yaml": "_gitguardex_config",
+    "AGENT.lock": "_gitguardex_agent",
+    "AGENTS.md": "_gitguardex_agent",
+    "CLAUDE.md": "_gitguardex_agent",
+    "config.yaml": "_gitguardex_config",
+    "context-docs-cue.md": "_gitguardex_spec",
+    "post-checkout": "_gitguardex_hook",
+    "pre-commit": "_gitguardex_hook",
+    "pre-push": "_gitguardex_hook",
+    "proposal.md": "_gitguardex_openspec",
+    "spec.md": "_gitguardex_spec",
+    "tasks.md": "_gitguardex_plan",
+    "plan.md": "_gitguardex_plan"
+  },
+  "fileExtensions": {
+    "openspec.yaml": "_gitguardex_config"
+  }
+}
