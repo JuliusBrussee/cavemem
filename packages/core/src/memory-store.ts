@@ -16,10 +16,12 @@ export interface MemoryStoreOptions {
 export class MemoryStore {
   readonly storage: Storage;
   readonly settings: Settings;
+  currentCwd: string | null;
 
   constructor(opts: MemoryStoreOptions) {
     this.storage = new Storage(opts.dbPath);
     this.settings = opts.settings;
+    this.currentCwd = null;
   }
 
   close(): void {
@@ -29,6 +31,7 @@ export class MemoryStore {
   // --- sessions ---
 
   startSession(p: { id: string; ide: string; cwd: string | null }): void {
+    this.currentCwd = p.cwd;
     this.storage.createSession({
       id: p.id,
       ide: p.ide,
@@ -116,7 +119,7 @@ export class MemoryStore {
   async search(query: string, limit?: number, embedder?: Embedder): Promise<SearchResult[]> {
     const cap = limit ?? this.settings.search.defaultLimit;
     const alpha = this.settings.search.alpha;
-    const keyword = this.storage.searchFts(query, cap * 2);
+    const keyword = this.storage.searchFts(query, cap * 2, this.currentCwd);
     if (!embedder || this.settings.embedding.provider === 'none') {
       return keyword.slice(0, cap);
     }
