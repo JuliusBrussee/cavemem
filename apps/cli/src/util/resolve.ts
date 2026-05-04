@@ -1,4 +1,5 @@
 import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 /**
  * Absolute path to the cavemem CLI binary. The installer writes this into
@@ -12,4 +13,12 @@ export function resolveCliPath(): string {
   } catch {
     return argv1;
   }
+}
+
+/**
+ * Absolute path to the executing CLI Javascript bundle.
+ * Used internally to reliably spawn the background worker daemon.
+ */
+export function resolveCliScriptPath(): string {
+  return fileURLToPath(import.meta.url);
 }
