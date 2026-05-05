@@ -83,7 +83,7 @@ export const SettingsSchema = z
           .min(0)
           .max(1)
           .default(0.5)
-          .describe('Hybrid rank weight: 0 = pure BM25, 1 = pure cosine, 0.5 = balanced.'),
+          .describe('Hybrid rank weight: 0 = pure cosine, 1 = pure BM25, 0.5 = balanced.'),
         defaultLimit: z
           .number()
           .int()
