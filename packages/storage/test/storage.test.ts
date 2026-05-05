@@ -38,6 +38,26 @@ describe('Storage', () => {
     expect(rows[0]?.compressed).toBe(1);
   });
 
+  it('opens an existing database in readonly mode without schema writes', () => {
+    storage.createSession({
+      id: 'readonly-session',
+      ide: 'claude-code',
+      cwd: '/tmp',
+      started_at: 123,
+      metadata: null,
+    });
+    storage.close();
+
+    const readonly = new Storage(join(dir, 'test.db'), { readonly: true });
+    try {
+      expect(readonly.listSessions().map((s) => s.id)).toContain('readonly-session');
+    } finally {
+      readonly.close();
+    }
+
+    storage = new Storage(join(dir, 'test.db'));
+  });
+
   it('FTS search finds matches', () => {
     storage.createSession({
       id: 's',

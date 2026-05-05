@@ -21,7 +21,9 @@ export class Storage {
   constructor(dbPath: string, opts: StorageOptions = {}) {
     mkdirSync(dirname(dbPath), { recursive: true });
     this.db = new Database(dbPath, opts.readonly ? { readonly: true } : {});
-    this.db.exec(SCHEMA_SQL);
+    if (!opts.readonly) {
+      this.db.exec(SCHEMA_SQL);
+    }
   }
 
   close(): void {
