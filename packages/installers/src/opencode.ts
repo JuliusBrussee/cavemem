@@ -13,30 +13,21 @@ interface OpenCodeConfig {
       enabled: boolean;
     }
   >;
-  plugin?: string[];
-}
-
-function configRoot(): string {
-  // Per OpenCode docs, the user-global config dir is ~/.config/opencode/.
-  // We honor XDG_CONFIG_HOME if set.
-  const xdg = process.env.XDG_CONFIG_HOME;
-  return xdg ? join(xdg, 'opencode') : join(homedir(), '.config', 'opencode');
 }
 
 function configFile(): string {
-  return join(configRoot(), 'opencode.json');
+  return join(homedir(), '.config', 'opencode', 'opencode.json');
 }
 
 function pluginDir(): string {
-  return join(configRoot(), 'plugins');
+  return join(homedir(), '.config', 'opencode', 'plugins');
 }
 
 function pluginLink(): string {
   return join(pluginDir(), 'cavemem.js');
 }
 
-// Legacy locations from earlier versions of this installer. Cleaned up on
-// uninstall so users don't end up with stale files.
+// Legacy config path used by earlier versions of the installer.
 function legacyConfigFile(): string {
   return join(homedir(), '.opencode', 'config.json');
 }
@@ -45,14 +36,18 @@ export const openCode: Installer = {
   id: 'opencode',
   label: 'OpenCode',
   async detect(_ctx): Promise<boolean> {
-    return existsSync(configRoot()) || existsSync(join(homedir(), '.opencode'));
+    // Prefer the modern XDG path; fall back to the legacy dot-dir.
+    return (
+      existsSync(join(homedir(), '.config', 'opencode')) ||
+      existsSync(join(homedir(), '.opencode'))
+    );
   },
   async install(ctx: InstallContext): Promise<string[]> {
     const messages: string[] = [];
 
     // 1. Write MCP config to the correct OpenCode config file.
-    const cfgPath = configFile();
-    const current = readJson<OpenCodeConfig>(cfgPath, {});
+    const path = configFile();
+    const current = readJson<OpenCodeConfig>(path, {});
     const next = deepMerge<OpenCodeConfig>(current, {
       mcp: {
         cavemem: {
@@ -62,17 +57,10 @@ export const openCode: Installer = {
         },
       },
     });
-    // Ensure the bundled bridge plugin is listed so OpenCode auto-loads it.
-    // Plugins in plugins/ also auto-load, but listing in `plugin` makes intent
-    // explicit and survives plugin-dir overrides.
-    const pluginList = Array.from(
-      new Set([...(next.plugin ?? []), 'file://./plugins/cavemem.js']),
-    );
-    next.plugin = pluginList;
-    writeJson(cfgPath, next);
-    messages.push(`wrote ${cfgPath}`);
+    writeJson(path, next);
+    messages.push(`wrote ${path}`);
 
-    // 2. Symlink the bundled bridge plugin into the OpenCode plugins directory.
+    // 2. Symlink the bridge plugin into the OpenCode plugins directory.
     const bridgeSource = join(dirname(ctx.cliPath), 'opencode-bridge.js');
     const pluginsDir = pluginDir();
     const link = pluginLink();
@@ -111,24 +99,12 @@ export const openCode: Installer = {
   async uninstall(_ctx): Promise<string[]> {
     const messages: string[] = [];
 
-    // 1. Remove MCP config and plugin entry from modern path.
-    const cfgPath = configFile();
-    const legacyFile = legacyConfigFile();
-
-    for (const path of [cfgPath, legacyFile]) {
-      if (!existsSync(path)) continue;
+    // 1. Remove MCP config from modern path.
+    const path = configFile();
+    if (existsSync(path)) {
       const current = readJson<OpenCodeConfig>(path, {});
       if (current.mcp) {
         delete current.mcp.cavemem;
-        if (Object.keys(current.mcp).length === 0) delete current.mcp;
-      }
-      if (current.mcpServers) {
-        delete current.mcpServers.cavemem;
-        if (Object.keys(current.mcpServers).length === 0) delete current.mcpServers;
-      }
-      if (current.plugin) {
-        current.plugin = current.plugin.filter((p) => !p.includes('cavemem'));
-        if (current.plugin.length === 0) delete current.plugin;
       }
       writeJson(path, current);
       messages.push(`updated ${path}`);
@@ -139,6 +115,27 @@ export const openCode: Installer = {
     if (existsSync(link)) {
       unlinkSync(link);
       messages.push(`removed plugin symlink ${link}`);
+    }
+
+    // 3. Clean up legacy config too.
+    const legacyUninstallFile = legacyConfigFile();
+    if (existsSync(legacyUninstallFile)) {
+      try {
+        const legacy = JSON.parse(readFileSync(legacyUninstallFile, 'utf8')) as {
+          mcpServers?: Record<string, unknown>;
+        };
+        if (legacy.mcpServers?.cavemem) {
+          delete legacy.mcpServers.cavemem;
+          writeFileSync(
+            legacyUninstallFile,
+            `${JSON.stringify(legacy, null, 2)}\n`,
+            'utf8',
+          );
+          messages.push(`updated ${legacyUninstallFile}`);
+        }
+      } catch {
+        // Ignore parse errors.
+      }
     }
 
     return messages;
