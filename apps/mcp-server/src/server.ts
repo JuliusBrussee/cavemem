@@ -116,7 +116,7 @@ export function buildServer(store: MemoryStore, settings: Settings): McpServer {
   return server;
 }
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   const settings = loadSettings();
   const dbPath = join(resolveDataDir(settings.dataDir), 'data.db');
   const store = new MemoryStore({ dbPath, settings });
