@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { loadSettings, resolveDataDir } from '@cavemem/config';
 import type { Command } from 'commander';
 import kleur from 'kleur';
-import { resolveCliPath } from '../util/resolve.js';
+import { resolveCliPath, resolveCliScriptPath } from '../util/resolve.js';
 
 function pidFile(): string {
   return join(resolveDataDir(loadSettings().dataDir), 'worker.pid');
@@ -37,10 +37,11 @@ export function registerWorkerCommand(program: Command): void {
       // Spawn `node <cli> worker run` — not `<cli> worker run` — because on
       // Windows the resolved cliPath is the .js file (npm's bin shim points
       // at it), and spawn() can't execute a .js directly → EFTYPE.
-      const child = spawn(process.execPath, [resolveCliPath(), 'worker', 'run'], {
+      const child = spawn(process.execPath, [resolveCliScriptPath(), 'worker', 'run'], {
         detached: true,
         stdio: 'ignore',
         env: process.env,
+        windowsHide: true,
       });
       child.unref();
       writeFileSync(pf, String(child.pid));

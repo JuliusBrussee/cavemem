@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { loadSettings, resolveDataDir } from '@cavemem/config';
 import type { Command } from 'commander';
 import kleur from 'kleur';
-import { resolveCliPath } from '../util/resolve.js';
+import { resolveCliPath, resolveCliScriptPath } from '../util/resolve.js';
 
 /**
  * Top-level `cavemem start|stop|restart|viewer` commands — matches the
@@ -54,10 +54,11 @@ function startWorker(silent = false): number | null {
     }
   }
   // Spawn `node <cli> worker run` so Windows doesn't try to exec a .js directly.
-  const child = spawn(process.execPath, [resolveCliPath(), 'worker', 'run'], {
+  const child = spawn(process.execPath, [resolveCliScriptPath(), 'worker', 'run'], {
     detached: true,
     stdio: 'ignore',
     env: process.env,
+    windowsHide: true,
   });
   child.unref();
   if (child.pid) writeFileSync(pf, String(child.pid));
