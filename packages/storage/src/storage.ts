@@ -130,20 +130,31 @@ export class Storage {
 
   // --- search (BM25 via FTS5) ---
 
-  searchFts(query: string, limit = 10): SearchHit[] {
+  searchFts(query: string, limit = 10, cwd?: string | null): SearchHit[] {
     if (!query.trim()) return [];
-    const rows = this.db
-      .prepare(
-        `SELECT o.id, o.session_id, o.ts,
+    const hasCwd = !!cwd;
+    const sql = hasCwd
+      ? `SELECT o.id, o.session_id, o.ts,
+                snippet(observations_fts, 0, '[', ']', '…', 16) AS snippet,
+                bm25(observations_fts) AS score
+         FROM observations_fts
+         JOIN observations o ON o.id = observations_fts.rowid
+         JOIN sessions s ON s.id = o.session_id
+         WHERE observations_fts MATCH ? AND s.cwd = ?
+         ORDER BY score ASC
+         LIMIT ?`
+      : `SELECT o.id, o.session_id, o.ts,
                 snippet(observations_fts, 0, '[', ']', '…', 16) AS snippet,
                 bm25(observations_fts) AS score
          FROM observations_fts
          JOIN observations o ON o.id = observations_fts.rowid
          WHERE observations_fts MATCH ?
          ORDER BY score ASC
-         LIMIT ?`,
-      )
-      .all(sanitizeMatch(query), limit) as Array<{
+         LIMIT ?`;
+    const params: unknown[] = hasCwd
+      ? [sanitizeMatch(query), cwd, limit]
+      : [sanitizeMatch(query), limit];
+    const rows = this.db.prepare(sql).all(...params) as Array<{
       id: number;
       session_id: string;
       ts: number;
