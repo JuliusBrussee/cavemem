@@ -1,22 +1,20 @@
-import { expand } from '@cavemem/compress';
-import { loadSettings, resolveDataDir } from '@cavemem/config';
-import { MemoryStore } from '@cavemem/core';
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { expand } from '@cavemem/compress';
+import { loadSettings, resolveDataDir } from '@cavemem/config';
+import { MemoryStore } from '@cavemem/core';
 
 /* ------------------------------------------------------------------ */
 // Minimal local types for the OpenCode plugin API (no runtime dependency
 // on @opencode-ai/plugin — the bridge is loaded dynamically by OpenCode).
 /* ------------------------------------------------------------------ */
 
-interface BunShell {
-  (
-    strings: TemplateStringsArray,
-    ...values: unknown[]
-  ): Promise<unknown> & { text(): Promise<string> };
-}
+type BunShell = (
+  strings: TemplateStringsArray,
+  ...values: unknown[]
+) => Promise<unknown> & { text(): Promise<string> };
 
 interface PluginInput {
   $: BunShell;
@@ -80,7 +78,7 @@ function resolveCavememCli(): string {
 function truncate(value: unknown, max = 2000): string {
   if (value == null) return '';
   const str = typeof value === 'string' ? value : JSON.stringify(value);
-  return str.length > max ? str.slice(0, max) + '…' : str;
+  return str.length > max ? `${str.slice(0, max)}…` : str;
 }
 
 const LOG_PATH = '/tmp/cavemem-bridge-errors.log';
@@ -97,10 +95,7 @@ async function log($: BunShell, msg: string): Promise<void> {
 // Plugin
 /* ------------------------------------------------------------------ */
 
-export default async function cavememBridge({
-  $,
-  directory,
-}: PluginInput): Promise<Hooks> {
+export default async function cavememBridge({ $, directory }: PluginInput): Promise<Hooks> {
   const CAVEMEM = resolveCavememCli();
 
   // Track which sessions we have already started so we don't duplicate.
@@ -108,10 +103,7 @@ export default async function cavememBridge({
   // Track which sessions already received retrieved context.
   const queriedSessions = new Set<string>();
   // Accumulate assistant message text by message ID.
-  const messageTexts = new Map<
-    string,
-    { sessionID: string; text: string }
-  >();
+  const messageTexts = new Map<string, { sessionID: string; text: string }>();
   // Track which message IDs are user messages (for prompt capture).
   const userMessageIds = new Set<string>();
 
@@ -128,10 +120,7 @@ export default async function cavememBridge({
     // If settings or DB are missing, prior-session context is simply skipped.
   }
 
-  async function runHook(
-    name: string,
-    data: Record<string, unknown>,
-  ): Promise<void> {
+  async function runHook(name: string, data: Record<string, unknown>): Promise<void> {
     const json = JSON.stringify(data);
     try {
       // Suppress ALL output so nothing leaks into the TUI.
@@ -145,10 +134,7 @@ export default async function cavememBridge({
     }
   }
 
-  async function flushTurn(
-    sessionID: string,
-    messageID: string,
-  ): Promise<void> {
+  async function flushTurn(sessionID: string, messageID: string): Promise<void> {
     const entry = messageTexts.get(messageID);
     if (!entry) return;
     const text = entry.text.trim();
@@ -181,8 +167,7 @@ export default async function cavememBridge({
         if (!sessionSummary) continue;
 
         const raw = sessionSummary.content;
-        const text =
-          sessionSummary.compressed === 1 ? expand(raw) : raw;
+        const text = sessionSummary.compressed === 1 ? expand(raw) : raw;
         if (text.trim()) hints.push(text.trim());
       }
 
@@ -233,13 +218,10 @@ export default async function cavememBridge({
           }
 
           case 'session.deleted': {
-            const session = event.properties?.info as
-              | { id: string }
-              | undefined;
+            const session = event.properties?.info as { id: string } | undefined;
             if (!session) return;
             for (const [mid, entry] of messageTexts) {
-              if (entry.sessionID === session.id)
-                await flushTurn(session.id, mid);
+              if (entry.sessionID === session.id) await flushTurn(session.id, mid);
             }
             activeSessions.delete(session.id);
             queriedSessions.delete(session.id);
@@ -321,10 +303,7 @@ export default async function cavememBridge({
                   prompt: text.trim(),
                 });
               }
-            } else if (
-              info.role === 'assistant' &&
-              info.time?.completed
-            ) {
+            } else if (info.role === 'assistant' && info.time?.completed) {
               await flushTurn(sid, mid);
             }
             break;

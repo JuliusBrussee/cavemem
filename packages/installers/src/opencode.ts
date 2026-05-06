@@ -1,4 +1,11 @@
-import { existsSync, mkdirSync, readFileSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { deepMerge, readJson, writeJson } from './fs-utils.js';
@@ -38,8 +45,7 @@ export const openCode: Installer = {
   async detect(_ctx): Promise<boolean> {
     // Prefer the modern XDG path; fall back to the legacy dot-dir.
     return (
-      existsSync(join(homedir(), '.config', 'opencode')) ||
-      existsSync(join(homedir(), '.opencode'))
+      existsSync(join(homedir(), '.config', 'opencode')) || existsSync(join(homedir(), '.opencode'))
     );
   },
   async install(ctx: InstallContext): Promise<string[]> {
@@ -82,11 +88,7 @@ export const openCode: Installer = {
         };
         if (legacy.mcpServers?.cavemem) {
           delete legacy.mcpServers.cavemem;
-          writeFileSync(
-            legacyFile,
-            `${JSON.stringify(legacy, null, 2)}\n`,
-            'utf8',
-          );
+          writeFileSync(legacyFile, `${JSON.stringify(legacy, null, 2)}\n`, 'utf8');
           messages.push(`removed stale legacy MCP entry from ${legacyFile}`);
         }
       } catch {
@@ -126,11 +128,7 @@ export const openCode: Installer = {
         };
         if (legacy.mcpServers?.cavemem) {
           delete legacy.mcpServers.cavemem;
-          writeFileSync(
-            legacyUninstallFile,
-            `${JSON.stringify(legacy, null, 2)}\n`,
-            'utf8',
-          );
+          writeFileSync(legacyUninstallFile, `${JSON.stringify(legacy, null, 2)}\n`, 'utf8');
           messages.push(`updated ${legacyUninstallFile}`);
         }
       } catch {
