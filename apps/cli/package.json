@@ -32,12 +32,7 @@
     "cavemem": "./dist/index.js"
   },
   "main": "./dist/index.js",
-  "files": [
-    "dist",
-    "hooks-scripts",
-    "README.md",
-    "LICENSE"
-  ],
+  "files": ["dist", "hooks-scripts", "README.md", "LICENSE"],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch --onSuccess \"node dist/index.js\"",
