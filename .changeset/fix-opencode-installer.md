@@ -5,10 +5,6 @@
 
 Enhance OpenCode integration with full-featured bridge plugin
 
-OpenCode support existed but was incomplete. The installer wrote the wrong config
-schema (`mcpServers` to `~/.opencode/config.json`) and did not register any session
-capture hooks, so the cavemem database stayed empty.
-
 This changeset:
 
 1. **Adds `apps/cli/src/opencode-bridge.ts`** — a bundled OpenCode plugin that maps
