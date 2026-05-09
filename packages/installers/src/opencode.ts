@@ -79,7 +79,7 @@ export const openCode: Installer = {
     messages.push(`wrote ${path}`);
 
     // 2. Symlink the bridge plugin into the OpenCode plugins directory.
-    const bridgeSource = join(dirname(ctx.cliPath), 'opencode-bridge.js');
+    const bridgeSource = join(dirname(ctx.cliPath), 'opencodeBridge.js');
     const pluginsDir = pluginDir();
     const link = pluginLink();
     mkdirSync(pluginsDir, { recursive: true });

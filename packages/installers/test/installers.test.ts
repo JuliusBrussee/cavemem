@@ -38,7 +38,7 @@ beforeEach(() => {
   // installer can create a real symlink during install.
   const fakeDist = join(home, 'cavemem', 'dist');
   mkdirSync(fakeDist, { recursive: true });
-  writeFileSync(join(fakeDist, 'opencode-bridge.js'), '// fake bridge\n');
+  writeFileSync(join(fakeDist, 'opencodeBridge.js'), '// fake bridge\n');
 
   ctx = {
     ideConfigDir: home,
