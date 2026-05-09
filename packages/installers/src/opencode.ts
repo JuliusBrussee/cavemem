@@ -20,14 +20,23 @@ interface OpenCodeConfig {
       enabled: boolean;
     }
   >;
+  mcpServers?: Record<string, { command: string; args?: string[] }>;
+  plugin?: string[];
+}
+
+function configRoot(): string {
+  // Per OpenCode docs, the user-global config dir is ~/.config/opencode/.
+  // We honor XDG_CONFIG_HOME if set.
+  const xdg = process.env.XDG_CONFIG_HOME;
+  return xdg ? join(xdg, 'opencode') : join(homedir(), '.config', 'opencode');
 }
 
 function configFile(): string {
-  return join(homedir(), '.config', 'opencode', 'opencode.json');
+  return join(configRoot(), 'opencode.json');
 }
 
 function pluginDir(): string {
-  return join(homedir(), '.config', 'opencode', 'plugins');
+  return join(configRoot(), 'plugins');
 }
 
 function pluginLink(): string {
@@ -44,9 +53,7 @@ export const openCode: Installer = {
   label: 'OpenCode',
   async detect(_ctx): Promise<boolean> {
     // Prefer the modern XDG path; fall back to the legacy dot-dir.
-    return (
-      existsSync(join(homedir(), '.config', 'opencode')) || existsSync(join(homedir(), '.opencode'))
-    );
+    return existsSync(configRoot()) || existsSync(join(homedir(), '.opencode'));
   },
   async install(ctx: InstallContext): Promise<string[]> {
     const messages: string[] = [];
@@ -66,9 +73,7 @@ export const openCode: Installer = {
     // Ensure the bundled bridge plugin is listed so OpenCode auto-loads it.
     // Plugins in plugins/ also auto-load, but listing in `plugin` makes intent
     // explicit and survives plugin-dir overrides.
-    const pluginList = Array.from(
-      new Set([...(next.plugin ?? []), 'file://./plugins/cavemem.js']),
-    );
+    const pluginList = Array.from(new Set([...(next.plugin ?? []), 'file://./plugins/cavemem.js']));
     next.plugin = pluginList;
     writeJson(path, next);
     messages.push(`wrote ${path}`);
