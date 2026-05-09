@@ -63,6 +63,13 @@ export const openCode: Installer = {
         },
       },
     });
+    // Ensure the bundled bridge plugin is listed so OpenCode auto-loads it.
+    // Plugins in plugins/ also auto-load, but listing in `plugin` makes intent
+    // explicit and survives plugin-dir overrides.
+    const pluginList = Array.from(
+      new Set([...(next.plugin ?? []), 'file://./plugins/cavemem.js']),
+    );
+    next.plugin = pluginList;
     writeJson(path, next);
     messages.push(`wrote ${path}`);
 
@@ -101,12 +108,24 @@ export const openCode: Installer = {
   async uninstall(_ctx): Promise<string[]> {
     const messages: string[] = [];
 
-    // 1. Remove MCP config from modern path.
-    const path = configFile();
-    if (existsSync(path)) {
+    // 1. Remove MCP config and plugin entry from modern path.
+    const cfgPath = configFile();
+    const legacyFile = legacyConfigFile();
+
+    for (const path of [cfgPath, legacyFile]) {
+      if (!existsSync(path)) continue;
       const current = readJson<OpenCodeConfig>(path, {});
       if (current.mcp) {
         delete current.mcp.cavemem;
+        if (Object.keys(current.mcp).length === 0) delete current.mcp;
+      }
+      if (current.mcpServers) {
+        delete current.mcpServers.cavemem;
+        if (Object.keys(current.mcpServers).length === 0) delete current.mcpServers;
+      }
+      if (current.plugin) {
+        current.plugin = current.plugin.filter((p) => !p.includes('cavemem'));
+        if (current.plugin.length === 0) delete current.plugin;
       }
       writeJson(path, current);
       messages.push(`updated ${path}`);
@@ -117,23 +136,6 @@ export const openCode: Installer = {
     if (existsSync(link)) {
       unlinkSync(link);
       messages.push(`removed plugin symlink ${link}`);
-    }
-
-    // 3. Clean up legacy config too.
-    const legacyUninstallFile = legacyConfigFile();
-    if (existsSync(legacyUninstallFile)) {
-      try {
-        const legacy = JSON.parse(readFileSync(legacyUninstallFile, 'utf8')) as {
-          mcpServers?: Record<string, unknown>;
-        };
-        if (legacy.mcpServers?.cavemem) {
-          delete legacy.mcpServers.cavemem;
-          writeFileSync(legacyUninstallFile, `${JSON.stringify(legacy, null, 2)}\n`, 'utf8');
-          messages.push(`updated ${legacyUninstallFile}`);
-        }
-      } catch {
-        // Ignore parse errors.
-      }
     }
 
     return messages;
