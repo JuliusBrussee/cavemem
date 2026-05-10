@@ -28,8 +28,20 @@ interface DbHandle {
   close(): void;
 }
 
+// Inline constructor type — avoids import type + typeof controversy with export= modules.
+type Bs3Constructor = new (
+  path: string,
+  opts?: { readonly?: boolean },
+) => { exec(sql: string): void; prepare(sql: string): unknown; close(): void };
+
 const _req = createRequire(import.meta.url);
 const isBun = typeof process !== 'undefined' && 'bun' in process.versions;
+
+// bun:sqlite returns null on no-match; better-sqlite3 returns undefined.
+// Normalise to undefined so callers don't need to know which backend is active.
+export function normalizeBunGet(result: unknown): unknown {
+  return result === null ? undefined : result;
+}
 
 function openDb(dbPath: string, opts: { readonly?: boolean } = {}): DbHandle {
   if (isBun) {
@@ -49,20 +61,18 @@ function openDb(dbPath: string, opts: { readonly?: boolean } = {}): DbHandle {
     return {
       runSchema: (sql) => db.exec(sql),
       close: () => db.close(),
-      // Wrap prepare so get() returns undefined instead of null on no-match,
-      // matching better-sqlite3 behaviour that callers depend on.
       prepare: (sql) => {
         const s = db.prepare(sql);
         return {
           run: (...a) => s.run(...a),
-          get: (...a) => { const r = s.get(...a); return r === null ? undefined : r; },
+          get: (...a) => normalizeBunGet(s.get(...a)),
           all: (...a) => s.all(...a),
         };
       },
     };
   }
   // Node: load better-sqlite3 native addon.
-  const Db = _req('better-sqlite3') as any;
+  const Db = _req('better-sqlite3') as Bs3Constructor;
   const db = new Db(dbPath, opts.readonly ? { readonly: true } : {});
   return {
     runSchema: (sql) => { db.exec(sql); },
