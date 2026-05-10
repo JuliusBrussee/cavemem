@@ -1,7 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
-import type BetterSqlite3 from 'better-sqlite3';
 import { SCHEMA_SQL } from './schema.js';
 import type {
   NewObservation,
@@ -63,7 +62,7 @@ function openDb(dbPath: string, opts: { readonly?: boolean } = {}): DbHandle {
     };
   }
   // Node: load better-sqlite3 native addon.
-  const Db = _req('better-sqlite3') as typeof BetterSqlite3;
+  const Db = _req('better-sqlite3') as any;
   const db = new Db(dbPath, opts.readonly ? { readonly: true } : {});
   return {
     runSchema: (sql) => { db.exec(sql); },
@@ -328,7 +327,8 @@ export class Storage {
   }
 }
 
-function sanitizeMatch(q: string): string {
+// Exported for testing.
+export function sanitizeMatch(q: string): string {
   // Escape double quotes and wrap each bare term to avoid FTS5 syntax errors.
   return q
     .split(/\s+/)
