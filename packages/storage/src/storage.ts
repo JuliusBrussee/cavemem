@@ -35,7 +35,7 @@ type Bs3Constructor = new (
 ) => { exec(sql: string): void; prepare(sql: string): unknown; close(): void };
 
 const _req = createRequire(import.meta.url);
-const isBun = typeof process !== 'undefined' && 'bun' in process.versions;
+export const isBun = typeof process !== 'undefined' && 'bun' in process.versions;
 
 // bun:sqlite returns null on no-match; better-sqlite3 returns undefined.
 // Normalise to undefined so callers don't need to know which backend is active.

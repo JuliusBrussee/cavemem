@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeBunGet, sanitizeMatch } from '../src/storage.js';
+import { normalizeBunGet, sanitizeMatch, isBun } from '../src/storage.js';
 
 describe('sanitizeMatch', () => {
   it('wraps each term in double quotes', () => {
@@ -41,5 +41,13 @@ describe('normalizeBunGet', () => {
   it('passes through 0 and false without coercing to undefined', () => {
     expect(normalizeBunGet(0)).toBe(0);
     expect(normalizeBunGet(false)).toBe(false);
+  });
+});
+
+describe('isBun', () => {
+  it('is false when running under Node (CI path always takes better-sqlite3)', () => {
+    // Verifies the Node path (better-sqlite3) is taken in CI.
+    // If this breaks, bun:sqlite is being loaded unexpectedly.
+    expect(isBun).toBe(false);
   });
 });
