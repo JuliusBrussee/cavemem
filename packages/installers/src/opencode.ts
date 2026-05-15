@@ -9,25 +9,25 @@ interface OpenCodeConfig {
   plugin?: string[];
 }
 
-function configRoot(): string {
+function configRoot(ctx: InstallContext): string {
   // Per OpenCode docs, the user-global config dir is ~/.config/opencode/.
   // We honor XDG_CONFIG_HOME if set.
   const xdg = process.env.XDG_CONFIG_HOME;
-  return xdg ? join(xdg, 'opencode') : join(homedir(), '.config', 'opencode');
+  return xdg ? join(xdg, 'opencode') : join(ctx.ideConfigDir, '.config', 'opencode');
 }
 
-function configFile(): string {
-  return join(configRoot(), 'opencode.json');
+function configFile(ctx: InstallContext): string {
+  return join(configRoot(ctx), 'opencode.json');
 }
 
-function pluginPath(): string {
-  return join(configRoot(), 'plugins', 'cavemem.js');
+function pluginPath(ctx: InstallContext): string {
+  return join(configRoot(ctx), 'plugins', 'cavemem.js');
 }
 
 // Legacy locations from earlier versions of this installer. Cleaned up on
 // uninstall so users don't end up with stale files.
-function legacyConfigFile(): string {
-  return join(homedir(), '.opencode', 'config.json');
+function legacyConfigFile(ctx: InstallContext): string {
+  return join(ctx.ideConfigDir, '.opencode', 'config.json');
 }
 
 function pluginSource(nodeBin: string, cliPath: string): string {
@@ -88,13 +88,13 @@ export const cavemem = async () => ({
 export const openCode: Installer = {
   id: 'opencode',
   label: 'OpenCode',
-  async detect(_ctx): Promise<boolean> {
-    return existsSync(configRoot()) || existsSync(join(homedir(), '.opencode'));
+  async detect(ctx: InstallContext): Promise<boolean> {
+    return existsSync(configRoot(ctx)) || existsSync(join(ctx.ideConfigDir, '.opencode'));
   },
   async install(ctx: InstallContext): Promise<string[]> {
     const messages: string[] = [];
-    const cfgPath = configFile();
-    const plugPath = pluginPath();
+    const cfgPath = configFile(ctx);
+    const plugPath = pluginPath(ctx);
 
     const current = readJson<OpenCodeConfig>(cfgPath, {});
     // Merge mcpServers + ensure cavemem plugin is registered so OpenCode
@@ -113,17 +113,17 @@ export const openCode: Installer = {
     writeJson(cfgPath, next);
     messages.push(`wrote ${cfgPath}`);
 
-    mkdirSync(join(configRoot(), 'plugins'), { recursive: true });
+    mkdirSync(join(configRoot(ctx), 'plugins'), { recursive: true });
     writeFileSync(plugPath, pluginSource(ctx.nodeBin, ctx.cliPath), 'utf8');
     messages.push(`wrote ${plugPath}`);
 
     return messages;
   },
-  async uninstall(_ctx): Promise<string[]> {
+  async uninstall(ctx: InstallContext): Promise<string[]> {
     const messages: string[] = [];
-    const cfgPath = configFile();
-    const plugPath = pluginPath();
-    const legacy = legacyConfigFile();
+    const cfgPath = configFile(ctx);
+    const plugPath = pluginPath(ctx);
+    const legacy = legacyConfigFile(ctx);
 
     for (const path of [cfgPath, legacy]) {
       if (!existsSync(path)) continue;

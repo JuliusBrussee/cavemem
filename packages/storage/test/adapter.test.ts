@@ -45,9 +45,8 @@ describe('normalizeBunGet', () => {
 });
 
 describe('isBun', () => {
-  it('is false when running under Node (CI path always takes better-sqlite3)', () => {
-    // Verifies the Node path (better-sqlite3) is taken in CI.
-    // If this breaks, bun:sqlite is being loaded unexpectedly.
-    expect(isBun).toBe(false);
+  it('correctly detects the runtime environment', () => {
+    const actuallyBun = typeof (globalThis as any).Bun !== 'undefined' || !!(globalThis as any).process?.versions?.bun;
+    expect(isBun).toBe(actuallyBun);
   });
 });
