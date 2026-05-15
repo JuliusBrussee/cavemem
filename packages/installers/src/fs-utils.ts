@@ -18,11 +18,22 @@ export function writeJson(path: string, data: unknown): void {
 /**
  * Quote a path for embedding into a shell command string (e.g., Claude
  * Code hook `command` fields). Wraps in double quotes unless the path is
- * already a bare token with no whitespace or shell metacharacters. On
- * Windows, double quotes also protect backslashes from being consumed.
+ * already a bare token with no whitespace, shell metacharacters, or
+ * backslashes.
+ *
+ * Backslashes force quoting because on Windows the hook `command` string
+ * is frequently executed under Git Bash / MSYS-bash (e.g., when launched
+ * from Claude Code on Windows). MSYS argv parsing treats unquoted
+ * backslashes as escape introducers and strips them, turning a path like
+ *   C:\Users\foo\AppData\Roaming\npm\node_modules\cavemem\dist\index.js
+ * into
+ *   CUsersfooAppDataRoamingnpmnode_modulescavememdistindex.js
+ * which Node then resolves against cwd and fails with MODULE_NOT_FOUND.
+ * Quoting the path preserves the backslashes verbatim under both cmd.exe
+ * and MSYS-bash.
  */
 export function shellQuote(p: string): string {
-  if (/^[\w@%+=:,./\\-]+$/.test(p)) return p;
+  if (/^[\w@%+=:,./-]+$/.test(p)) return p;
   return `"${p.replace(/"/g, '\\"')}"`;
 }
 

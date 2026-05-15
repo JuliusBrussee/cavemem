@@ -293,6 +293,28 @@ describe('claude-code installer', () => {
     });
   });
 
+  it('quotes Windows paths even when they contain no spaces (MSYS strips bare backslashes)', async () => {
+    // Realistic default install layout: no spaces in the cliPath, only
+    // backslashes. Previously the regex whitelist allowed `\\` through as a
+    // bare token, leaving the path unquoted. Under Git Bash / MSYS the
+    // backslashes were then stripped from argv and Node failed with
+    // `MODULE_NOT_FOUND: ...UsersUserAppData...index.js`.
+    const winCtx: InstallContext = {
+      ideConfigDir: home,
+      cliPath: 'C:\\Users\\User\\AppData\\Roaming\\npm\\node_modules\\cavemem\\dist\\index.js',
+      nodeBin: 'C:\\Program Files\\nodejs\\node.exe',
+      dataDir: join(home, '.cavemem'),
+    };
+    await claudeCode.install(winCtx);
+    const settings = JSON.parse(readFileSync(settingsPath(), 'utf8')) as {
+      hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+    };
+    const cmd = settings.hooks.SessionStart?.[0]?.hooks?.[0]?.command ?? '';
+    expect(cmd).toBe(
+      `"${winCtx.nodeBin}" "${winCtx.cliPath}" hook run session-start --ide claude-code`,
+    );
+  });
+
   it('detect returns true only when ~/.claude exists', async () => {
     expect(await claudeCode.detect(ctx)).toBe(false);
     mkdirSync(join(home, '.claude'));
