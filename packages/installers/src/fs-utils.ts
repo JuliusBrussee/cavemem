@@ -16,13 +16,30 @@ export function writeJson(path: string, data: unknown): void {
 }
 
 /**
+ * Normalize a path to forward-slash form. Windows accepts forward slashes
+ * in every API we hand the path to (CreateProcess, cmd.exe, PowerShell,
+ * Node spawn), and unlike backslashes they survive intact when the path
+ * is later interpolated into a shell command string and passed through
+ * bash. Use this on every path that ends up inside a shell `command`
+ * field (e.g., Claude Code hooks). Paths that go into a `command` +
+ * `args[]` spawn (no shell) don't need it.
+ */
+export function posixPath(p: string): string {
+  return p.replace(/\\/g, '/');
+}
+
+/**
  * Quote a path for embedding into a shell command string (e.g., Claude
  * Code hook `command` fields). Wraps in double quotes unless the path is
- * already a bare token with no whitespace or shell metacharacters. On
- * Windows, double quotes also protect backslashes from being consumed.
+ * already a bare token with no whitespace or shell metacharacters.
+ *
+ * Callers must pass a forward-slash-normalized path (see `posixPath`).
+ * Embedding raw Windows backslash paths in a bash command string causes
+ * silent collapse — bash drops every `\<letter>` that isn't a defined
+ * escape, turning `C:\Users\hp\node.exe` into `C:Usershpnode.exe`.
  */
 export function shellQuote(p: string): string {
-  if (/^[\w@%+=:,./\\-]+$/.test(p)) return p;
+  if (/^[\w@%+=:,./-]+$/.test(p)) return p;
   return `"${p.replace(/"/g, '\\"')}"`;
 }
 

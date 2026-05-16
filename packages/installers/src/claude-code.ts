@@ -1,7 +1,7 @@
 import { copyFileSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { deepMerge, readJson, shellQuote, writeJson } from './fs-utils.js';
+import { deepMerge, posixPath, readJson, shellQuote, writeJson } from './fs-utils.js';
 import type { InstallContext, Installer } from './types.js';
 
 interface ClaudeHookEntry {
@@ -50,11 +50,14 @@ export const claudeCode: Installer = {
     const messages: string[] = [];
     const settingsPath = settingsFile();
     const mcpPath = mcpFile();
-    // Hook commands are shell strings, so nodeBin + cliPath must be quoted —
-    // Windows npm installs land under paths like C:\Users\...\AppData that
-    // may contain spaces. Both cmd.exe and sh treat "..." as one argv token.
-    const nodeBin = shellQuote(ctx.nodeBin);
-    const cliPath = shellQuote(ctx.cliPath);
+    // Hook commands are shell strings, so nodeBin + cliPath must be both
+    // forward-slash-normalized AND quoted. Normalization first because bash
+    // would silently eat backslashes (`C:\Users\hp` → `C:Usershp`); quoting
+    // second because Windows npm installs land under paths like
+    // C:\Users\...\AppData that may contain spaces — `"..."` keeps the path
+    // as one argv token in both cmd.exe and sh.
+    const nodeBin = shellQuote(posixPath(ctx.nodeBin));
+    const cliPath = shellQuote(posixPath(ctx.cliPath));
 
     // ---- hooks → ~/.claude/settings.json: append to existing arrays ----
     const settings = readJson<ClaudeSettings>(settingsPath, {});

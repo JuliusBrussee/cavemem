@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { claudeCode } from '../src/claude-code.js';
 import { codex } from '../src/codex.js';
 import { cursor } from '../src/cursor.js';
-import { deepMerge } from '../src/fs-utils.js';
+import { deepMerge, posixPath } from '../src/fs-utils.js';
 import { openCode } from '../src/opencode.js';
 import { getInstaller, installers } from '../src/registry.js';
 import type { InstallContext } from '../src/types.js';
@@ -57,6 +57,18 @@ describe('registry', () => {
   });
   it('getInstaller throws on unknown id', () => {
     expect(() => getInstaller('nope')).toThrow(/Unknown IDE/);
+  });
+});
+
+describe('posixPath', () => {
+  it('replaces backslashes with forward slashes', () => {
+    expect(posixPath('C:\\Users\\hp\\node.exe')).toBe('C:/Users/hp/node.exe');
+  });
+  it('is a no-op for already-POSIX paths', () => {
+    expect(posixPath('/usr/local/bin/node')).toBe('/usr/local/bin/node');
+  });
+  it('handles mixed separators', () => {
+    expect(posixPath('C:\\Users/hp\\node.exe')).toBe('C:/Users/hp/node.exe');
   });
 });
 
@@ -267,7 +279,7 @@ describe('claude-code installer', () => {
     expect(claudeJson.mcpServers.cavemem).toBeUndefined();
   });
 
-  it('quotes paths with spaces in hook command strings (Windows)', async () => {
+  it('normalizes and quotes Windows paths in hook command strings', async () => {
     const winCtx: InstallContext = {
       ideConfigDir: home,
       cliPath: 'C:\\Users\\Some User\\AppData\\Roaming\\npm\\node_modules\\cavemem\\dist\\index.js',
@@ -282,15 +294,40 @@ describe('claude-code installer', () => {
       mcpServers: Record<string, { command: string; args: string[] }>;
     };
     const cmd = settings.hooks.SessionStart?.[0]?.hooks?.[0]?.command ?? '';
+    // Forward-slash form survives bash escape processing (backslashes would
+    // be eaten — `\U`, `\h`, `\s` are undefined escapes in bash double-quoted
+    // strings); double quotes still wrap because of the embedded space in
+    // "Some User" and "Program Files".
     expect(cmd).toBe(
-      `"${winCtx.nodeBin}" "${winCtx.cliPath}" hook run session-start --ide claude-code`,
+      '"C:/Program Files/nodejs/node.exe" "C:/Users/Some User/AppData/Roaming/npm/node_modules/cavemem/dist/index.js" hook run session-start --ide claude-code',
     );
-    // MCP entry is a structured shape, so no quoting needed there — Claude
-    // spawns command + args directly.
+    // No backslashes survive in the shell-string command.
+    expect(cmd).not.toMatch(/\\/);
+    // MCP entry is a structured spawn (command + args), so the original
+    // Windows-style path is preserved verbatim — no shell, no escape risk.
     expect(claudeJson.mcpServers.cavemem).toEqual({
       command: winCtx.nodeBin,
       args: [winCtx.cliPath, 'mcp'],
     });
+  });
+
+  it('normalizes Windows paths with no spaces (no quoting needed)', async () => {
+    const winCtx: InstallContext = {
+      ideConfigDir: home,
+      cliPath: 'C:\\Users\\hp\\scoop\\persist\\nodejs\\bin\\node_modules\\cavemem\\dist\\index.js',
+      nodeBin: 'C:\\Users\\hp\\scoop\\apps\\nodejs\\current\\node.exe',
+      dataDir: join(home, '.cavemem'),
+    };
+    await claudeCode.install(winCtx);
+    const settings = JSON.parse(readFileSync(settingsPath(), 'utf8')) as {
+      hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+    };
+    const cmd = settings.hooks.Stop?.[0]?.hooks?.[0]?.command ?? '';
+    // No spaces → bare token, no quoting; still forward-slashed.
+    expect(cmd).toBe(
+      'C:/Users/hp/scoop/apps/nodejs/current/node.exe C:/Users/hp/scoop/persist/nodejs/bin/node_modules/cavemem/dist/index.js hook run stop --ide claude-code',
+    );
+    expect(cmd).not.toMatch(/\\/);
   });
 
   it('detect returns true only when ~/.claude exists', async () => {
