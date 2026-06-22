@@ -18,9 +18,9 @@ export default defineConfig({
   // "Invalid or unexpected token". The shebang we need on the main entry is
   // in src/index.ts itself.
   noExternal: [/^@cavemem\//],
-  // @xenova/transformers is an optional peer of @cavemem/embedding — bundling
-  // it drags 1.5 MB of ONNX runtime + sharp native binaries into the CLI dist.
+  // @huggingface/transformers is an optional peer of @cavemem/embedding —
+  // bundling it drags ONNX runtime + sharp native binaries into the CLI dist.
   // Keep it external so the CLI loads fast and installs without heavy native deps.
-  external: ['@xenova/transformers'],
+  external: ['@huggingface/transformers'],
   define: { __CAVEMEM_VERSION__: JSON.stringify(version) },
 });
