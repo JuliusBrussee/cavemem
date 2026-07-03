@@ -70,6 +70,16 @@ export const claudeCode: Installer = {
       others.push({
         hooks: [
           {
+            // #57: Claude Code's newer hooks docs mention an `args` exec-form
+            // (no shell at all) and a `shell` field to force powershell, but
+            // we stay on this plain command string — it has no shell
+            // metacharacters, so it tokenizes identically whether Claude
+            // Code runs it through sh or falls back to powershell, and we
+            // can't verify the newer fields against every installed Claude
+            // Code version. If an unsupported field is silently ignored on
+            // an older build, we'd rather that be a no-op than a hook that
+            // stops firing. See #56's `checkWindowsSh` for the actual
+            // failure mode this leaves on the table (`sh` missing).
             type: 'command',
             command: `${nodeBin} ${cliPath} hook run ${hookId} --ide claude-code`,
           },
