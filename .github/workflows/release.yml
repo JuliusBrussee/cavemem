@@ -42,10 +42,13 @@ jobs:
       # confirm better-sqlite3 loads. Catches the things unit tests cannot.
       - run: bash scripts/e2e-publish.sh
 
+      # `pnpm run version` = `changeset version` + biome format, so the
+      # Version Packages PR is already formatted and the lint gate on its
+      # merge commit can't fail on changesets' package.json style.
       - uses: changesets/action@v1
         with:
           publish: pnpm release
-          version: pnpm changeset version
+          version: pnpm run version
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

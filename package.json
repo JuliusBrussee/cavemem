@@ -26,6 +26,7 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "clean": "pnpm -r exec rm -rf dist && rm -rf node_modules/.cache",
+    "version": "changeset version && biome check --write --linter-enabled=false .",
     "release": "changeset publish"
   },
   "devDependencies": {
