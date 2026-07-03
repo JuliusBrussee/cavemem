@@ -9,18 +9,18 @@ interface GeminiSettings {
   contextFiles?: string[];
 }
 
-function settingsFile(): string {
-  return join(homedir(), '.gemini', 'settings.json');
+function settingsFile(ctx: InstallContext): string {
+  return join(ctx.ideConfigDir, '.gemini', 'settings.json');
 }
 
 export const geminiCli: Installer = {
   id: 'gemini-cli',
   label: 'Gemini CLI',
-  async detect(_ctx): Promise<boolean> {
-    return existsSync(join(homedir(), '.gemini'));
+  async detect(ctx: InstallContext): Promise<boolean> {
+    return existsSync(join(ctx.ideConfigDir, '.gemini'));
   },
   async install(ctx: InstallContext): Promise<string[]> {
-    const path = settingsFile();
+    const path = settingsFile(ctx);
     const current = readJson<GeminiSettings>(path, {});
     const next = deepMerge<GeminiSettings>(current, {
       mcpServers: {
@@ -30,8 +30,9 @@ export const geminiCli: Installer = {
     writeJson(path, next);
     return [`wrote ${path}`];
   },
-  async uninstall(_ctx): Promise<string[]> {
-    const path = settingsFile();
+  async uninstall(ctx: InstallContext): Promise<string[]> {
+    const path = settingsFile(ctx);
+
     const current = readJson<GeminiSettings>(path, {});
     if (current.mcpServers) delete current.mcpServers.cavemem;
     writeJson(path, current);

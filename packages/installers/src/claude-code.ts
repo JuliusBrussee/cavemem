@@ -28,12 +28,12 @@ const HOOK_NAMES: Array<[string, string]> = [
   ['SessionEnd', 'session-end'],
 ];
 
-function settingsFile(): string {
-  return join(homedir(), '.claude', 'settings.json');
+function settingsFile(ctx: InstallContext): string {
+  return join(ctx.ideConfigDir, '.claude', 'settings.json');
 }
 
-function mcpFile(): string {
-  return join(homedir(), '.claude.json');
+function mcpFile(ctx: InstallContext): string {
+  return join(ctx.ideConfigDir, '.claude.json');
 }
 
 function isCavememHookEntry(entry: ClaudeHookEntry, hookId: string): boolean {
@@ -43,13 +43,13 @@ function isCavememHookEntry(entry: ClaudeHookEntry, hookId: string): boolean {
 export const claudeCode: Installer = {
   id: 'claude-code',
   label: 'Claude Code',
-  async detect(_ctx: InstallContext): Promise<boolean> {
-    return existsSync(join(homedir(), '.claude'));
+  async detect(ctx: InstallContext): Promise<boolean> {
+    return existsSync(join(ctx.ideConfigDir, '.claude'));
   },
   async install(ctx: InstallContext): Promise<string[]> {
     const messages: string[] = [];
-    const settingsPath = settingsFile();
-    const mcpPath = mcpFile();
+    const settingsPath = settingsFile(ctx);
+    const mcpPath = mcpFile(ctx);
     // Hook commands are shell strings, so nodeBin + cliPath must be quoted —
     // Windows npm installs land under paths like C:\Users\...\AppData that
     // may contain spaces. Both cmd.exe and sh treat "..." as one argv token.
@@ -109,10 +109,10 @@ export const claudeCode: Installer = {
 
     return messages;
   },
-  async uninstall(_ctx: InstallContext): Promise<string[]> {
+  async uninstall(ctx: InstallContext): Promise<string[]> {
     const messages: string[] = [];
-    const settingsPath = settingsFile();
-    const mcpPath = mcpFile();
+    const settingsPath = settingsFile(ctx);
+    const mcpPath = mcpFile(ctx);
 
     if (existsSync(settingsPath)) {
       const settings = readJson<ClaudeSettings>(settingsPath, {});

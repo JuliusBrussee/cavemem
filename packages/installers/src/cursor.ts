@@ -8,18 +8,18 @@ interface CursorConfig {
   mcpServers?: Record<string, { command: string; args?: string[] }>;
 }
 
-function configFile(): string {
-  return join(homedir(), '.cursor', 'mcp.json');
+function configFile(ctx: InstallContext): string {
+  return join(ctx.ideConfigDir, '.cursor', 'mcp.json');
 }
 
 export const cursor: Installer = {
   id: 'cursor',
   label: 'Cursor',
-  async detect(_ctx): Promise<boolean> {
-    return existsSync(join(homedir(), '.cursor'));
+  async detect(ctx: InstallContext): Promise<boolean> {
+    return existsSync(join(ctx.ideConfigDir, '.cursor'));
   },
   async install(ctx: InstallContext): Promise<string[]> {
-    const path = configFile();
+    const path = configFile(ctx);
     const current = readJson<CursorConfig>(path, {});
     const next = deepMerge<CursorConfig>(current, {
       mcpServers: { cavemem: { command: ctx.nodeBin, args: [ctx.cliPath, 'mcp'] } },
@@ -27,8 +27,8 @@ export const cursor: Installer = {
     writeJson(path, next);
     return [`wrote ${path}`];
   },
-  async uninstall(_ctx): Promise<string[]> {
-    const path = configFile();
+  async uninstall(ctx: InstallContext): Promise<string[]> {
+    const path = configFile(ctx);
     const current = readJson<CursorConfig>(path, {});
     if (current.mcpServers) delete current.mcpServers.cavemem;
     writeJson(path, current);

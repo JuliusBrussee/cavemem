@@ -15,9 +15,9 @@ const MODEL_DIMS: Record<string, number> = {
 };
 
 /**
- * Local embedder backed by @xenova/transformers. Imports the package lazily
- * so installations with provider="none" or a remote provider don't pay the
- * ONNX runtime cost just to load the config.
+ * Local embedder backed by @huggingface/transformers. Imports the package
+ * lazily so installations with provider="none" or a remote provider don't pay
+ * the ONNX runtime cost just to load the config.
  */
 export async function createLocalEmbedder(
   model: string,
@@ -25,9 +25,9 @@ export async function createLocalEmbedder(
 ): Promise<Embedder> {
   const log = opts.log ?? (() => {});
 
-  // Guard against the musl segfault (issue #20). onnxruntime-node prebuilts
-  // target glibc; loading them on Alpine / musl-built Node aborts the
-  // process. Surface a clean, actionable error instead.
+  // Guard against the musl segfault (issue #20). @huggingface/transformers
+  // pulls in onnxruntime-node, whose prebuilts target glibc; loading them on
+  // Alpine / musl-built Node aborts the process. Surface a clean error instead.
   const muslProbe = detectMusl();
   if (muslProbe.isMusl) {
     throw new Error(
@@ -36,13 +36,13 @@ export async function createLocalEmbedder(
   }
 
   log(`[cavemem:embed] loading local model ${model}`);
-  const transformers = (await import('@xenova/transformers').catch((err) => {
+  const transformers = (await import('@huggingface/transformers').catch((err) => {
     throw new Error(
-      `Local embedding provider requires @xenova/transformers. Install it or set embedding.provider to 'none'. (${String(
+      `Local embedding provider requires @huggingface/transformers. Install it or set embedding.provider to 'none'. (${String(
         err,
       )})`,
     );
-  })) as typeof import('@xenova/transformers');
+  })) as typeof import('@huggingface/transformers');
 
   if (opts.cacheDir) {
     transformers.env.cacheDir = opts.cacheDir;
@@ -50,8 +50,10 @@ export async function createLocalEmbedder(
     transformers.env.allowLocalModels = true;
   }
 
+  // transformers v3 replaced the v2 `quantized: true` boolean with a `dtype`
+  // selector; 'q8' is the int8-quantized weight set, matching the old default.
   const extractor = await transformers.pipeline('feature-extraction', model, {
-    quantized: true,
+    dtype: 'q8',
   });
 
   let dim = MODEL_DIMS[model] ?? 0;

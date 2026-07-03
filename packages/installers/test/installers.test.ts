@@ -33,9 +33,16 @@ beforeEach(() => {
   // installer's homedir() call lines up with the test's `home` regardless of
   // platform.
   process.env.USERPROFILE = home;
+
+  // Place the fake CLI and bridge inside the temp dir so the opencode
+  // installer can create a real symlink during install.
+  const fakeDist = join(home, 'cavemem', 'dist');
+  mkdirSync(fakeDist, { recursive: true });
+  writeFileSync(join(fakeDist, 'opencodeBridge.js'), '// fake bridge\n');
+
   ctx = {
     ideConfigDir: home,
-    cliPath: '/fake/bin/cavemem.js',
+    cliPath: join(fakeDist, 'index.js'),
     nodeBin: '/fake/bin/node',
     dataDir: join(home, '.cavemem'),
   };
@@ -441,54 +448,123 @@ describe('opencode installer', () => {
   const cfgPath = () => join(home, '.config', 'opencode', 'opencode.json');
   const pluginPath = () => join(home, '.config', 'opencode', 'plugins', 'cavemem.js');
 
-  it('writes opencode.json + plugin file', async () => {
+  it('writes opencode.json with mcp schema + symlinks bridge plugin', async () => {
     await openCode.install(ctx);
     expect(existsSync(cfgPath())).toBe(true);
     expect(existsSync(pluginPath())).toBe(true);
 
     const cfg = JSON.parse(readFileSync(cfgPath(), 'utf8')) as {
-      mcpServers: Record<string, { command: string; args: string[] }>;
+      mcp: Record<string, { type: string; command: string[]; enabled: boolean }>;
       plugin: string[];
     };
-    expect(cfg.mcpServers.cavemem).toEqual({
-      command: ctx.nodeBin,
-      args: [ctx.cliPath, 'mcp'],
+    expect(cfg.mcp.cavemem).toEqual({
+      type: 'local',
+      command: [ctx.nodeBin, ctx.cliPath, 'mcp'],
+      enabled: true,
     });
     expect(cfg.plugin).toContain('file://./plugins/cavemem.js');
 
+    // Plugin must be a symlink to the bundled bridge file.
     const plugin = readFileSync(pluginPath(), 'utf8');
-    expect(plugin).toContain('const NODE = ');
-    expect(plugin).toContain("'tool.execute.after'");
-    expect(plugin).toContain("'post-tool-use'");
-    expect(plugin).toContain("'session-start'");
-    // Plugin must NOT block the IDE — must use detached spawn.
-    expect(plugin).toContain('detached: true');
+    expect(plugin).toContain('// fake bridge');
   });
 
-  it('uninstall removes plugin file and cavemem entries, leaves user keys', async () => {
+  it('is idempotent on re-install', async () => {
+    await openCode.install(ctx);
+    await openCode.install(ctx);
+
+    const cfg = JSON.parse(readFileSync(cfgPath(), 'utf8')) as {
+      mcp: Record<string, unknown>;
+      plugin: string[];
+    };
+    expect(Object.keys(cfg.mcp)).toEqual(['cavemem']);
+    expect(cfg.plugin).toContain('file://./plugins/cavemem.js');
+
+    expect(existsSync(pluginPath())).toBe(true);
+  });
+
+  it('migrates a stale mcpServers.cavemem entry out of the modern config file on install', async () => {
+    // A prior installer version wrote mcpServers.cavemem straight into
+    // ~/.config/opencode/opencode.json (the wrong key — OpenCode expects
+    // `mcp`). Re-running install with the current installer must clean up
+    // that orphaned entry, not just add the new mcp.cavemem key alongside it.
+    mkdirSync(join(home, '.config', 'opencode'), { recursive: true });
+    writeFileSync(
+      cfgPath(),
+      JSON.stringify({
+        mcpServers: { cavemem: { command: 'old', args: ['mcp'] }, keep: { command: '/keep' } },
+      }),
+    );
+
+    await openCode.install(ctx);
+    const cfg = JSON.parse(readFileSync(cfgPath(), 'utf8')) as {
+      mcp: Record<string, unknown>;
+      mcpServers?: Record<string, unknown>;
+    };
+    expect(cfg.mcp.cavemem).toBeDefined();
+    expect(cfg.mcpServers?.cavemem).toBeUndefined();
+    expect(cfg.mcpServers?.keep).toEqual({ command: '/keep' });
+  });
+
+  it('preserves unrelated user settings on install + uninstall', async () => {
     mkdirSync(join(home, '.config', 'opencode'), { recursive: true });
     writeFileSync(
       cfgPath(),
       JSON.stringify({
         theme: 'dark',
-        mcpServers: { other: { command: '/other/bin' } },
+        mcp: { other: { type: 'local', command: ['echo'], enabled: true } },
         plugin: ['some-other-plugin'],
       }),
     );
 
     await openCode.install(ctx);
-    await openCode.uninstall(ctx);
-
-    const cfg = JSON.parse(readFileSync(cfgPath(), 'utf8')) as {
+    const installed = JSON.parse(readFileSync(cfgPath(), 'utf8')) as {
       theme: string;
-      mcpServers: Record<string, unknown>;
+      mcp: Record<string, unknown>;
       plugin: string[];
     };
-    expect(cfg.theme).toBe('dark');
-    expect(cfg.mcpServers.other).toEqual({ command: '/other/bin' });
-    expect(cfg.mcpServers.cavemem).toBeUndefined();
-    expect(cfg.plugin).toEqual(['some-other-plugin']);
+    expect(installed.theme).toBe('dark');
+    expect(installed.mcp.other).toBeDefined();
+    expect(installed.mcp.cavemem).toBeDefined();
+    expect(installed.plugin).toContain('some-other-plugin');
+    expect(installed.plugin).toContain('file://./plugins/cavemem.js');
+
+    await openCode.uninstall(ctx);
+    const after = JSON.parse(readFileSync(cfgPath(), 'utf8')) as typeof installed;
+    expect(after.theme).toBe('dark');
+    expect(after.mcp.other).toBeDefined();
+    expect(after.mcp.cavemem).toBeUndefined();
+    expect(after.plugin).toEqual(['some-other-plugin']);
     expect(existsSync(pluginPath())).toBe(false);
+  });
+
+  it('cleans up legacy config on uninstall', async () => {
+    const legacyPath = join(home, '.opencode', 'config.json');
+    mkdirSync(join(home, '.opencode'), { recursive: true });
+    writeFileSync(
+      legacyPath,
+      JSON.stringify({
+        mcpServers: { cavemem: { command: '/old/bin' } },
+      }),
+    );
+
+    await openCode.uninstall(ctx);
+    const legacy = JSON.parse(readFileSync(legacyPath, 'utf8')) as {
+      mcpServers?: Record<string, unknown>;
+    };
+    expect(legacy.mcpServers?.cavemem).toBeUndefined();
+  });
+
+  it('detect returns true when ~/.config/opencode exists', async () => {
+    expect(await openCode.detect(ctx)).toBe(false);
+    mkdirSync(join(home, '.config', 'opencode'), { recursive: true });
+    expect(await openCode.detect(ctx)).toBe(true);
+  });
+
+  it('detect falls back to legacy ~/.opencode path', async () => {
+    expect(await openCode.detect(ctx)).toBe(false);
+    mkdirSync(join(home, '.opencode'));
+    expect(await openCode.detect(ctx)).toBe(true);
   });
 });
 

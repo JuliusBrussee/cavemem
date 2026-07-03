@@ -26,18 +26,18 @@ const HOOK_NAMES: Array<[string, string, string?]> = [
   ['Stop', 'stop'],
 ];
 
-function configFile(): string {
-  return join(homedir(), '.codex', 'config.toml');
+function configFile(ctx: InstallContext): string {
+  return join(ctx.ideConfigDir, '.codex', 'config.toml');
 }
 
-function hooksFile(): string {
-  return join(homedir(), '.codex', 'hooks.json');
+function hooksFile(ctx: InstallContext): string {
+  return join(ctx.ideConfigDir, '.codex', 'hooks.json');
 }
 
-function legacyConfigFile(): string {
+function legacyConfigFile(ctx: InstallContext): string {
   // Earlier versions of this installer wrote a JSON config that Codex never
   // read. Cleaned up on uninstall.
-  return join(homedir(), '.codex', 'config.json');
+  return join(ctx.ideConfigDir, '.codex', 'config.json');
 }
 
 function isCavememHookGroup(group: CodexHookGroup, hookId: string): boolean {
@@ -65,13 +65,13 @@ function writeToml(path: string, data: Record<string, unknown>): void {
 export const codex: Installer = {
   id: 'codex',
   label: 'Codex CLI',
-  async detect(_ctx): Promise<boolean> {
-    return existsSync(join(homedir(), '.codex'));
+  async detect(ctx: InstallContext): Promise<boolean> {
+    return existsSync(join(ctx.ideConfigDir, '.codex'));
   },
   async install(ctx: InstallContext): Promise<string[]> {
     const messages: string[] = [];
-    const cfgPath = configFile();
-    const hooksPath = hooksFile();
+    const cfgPath = configFile(ctx);
+    const hooksPath = hooksFile(ctx);
 
     // ---- config.toml: features.codex_hooks + mcp_servers.cavemem ----
     const cfg = readToml(cfgPath);
@@ -116,11 +116,11 @@ export const codex: Installer = {
 
     return messages;
   },
-  async uninstall(_ctx): Promise<string[]> {
+  async uninstall(ctx: InstallContext): Promise<string[]> {
     const messages: string[] = [];
-    const cfgPath = configFile();
-    const hooksPath = hooksFile();
-    const legacy = legacyConfigFile();
+    const cfgPath = configFile(ctx);
+    const hooksPath = hooksFile(ctx);
+    const legacy = legacyConfigFile(ctx);
 
     if (existsSync(cfgPath)) {
       const cfg = readToml(cfgPath);
