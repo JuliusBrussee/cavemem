@@ -181,4 +181,53 @@ describe('enrich tool behavior', () => {
     expect(res.isError).toBe(true);
     expect(store.storage.countObservations()).toBe(0);
   });
+
+  it('redacts secrets and private tags in stored query/note metadata', async () => {
+    await connect(enabledSettings, happyFetch());
+    const res = await client.callTool({
+      name: 'enrich',
+      arguments: {
+        query: 'debug sk-live-ABCDEF1234567890 error',
+        note: 'context <private>hunter2</private> tail',
+      },
+    });
+    const text = (res.content as Array<{ type: string; text: string }>)[0]?.text ?? '{}';
+    const body = JSON.parse(text) as { stored_ids: number[] };
+    const rows = store.getObservations(body.stored_ids);
+    for (const row of rows) {
+      const meta = row.metadata as { query: string; note: string };
+      expect(meta.query).toBe('debug [REDACTED] error');
+      expect(meta.query).not.toContain('sk-live-');
+      expect(meta.note).toBe('context  tail');
+      expect(meta.note).not.toContain('hunter2');
+    }
+  });
+
+  it('skips result urls resolving to private hosts, storing only public ones', async () => {
+    const ddgHtml = `<html><body>
+      <div class="result results_links web-result">
+        <h2 class="result__title"><a class="result__a" href="http://169.254.169.254/latest/">Metadata</a></h2>
+        <a class="result__snippet" href="http://169.254.169.254/latest/">imds</a>
+      </div>
+      <div class="result results_links web-result">
+        <h2 class="result__title"><a class="result__a" href="https://ok.example/post">OK</a></h2>
+        <a class="result__snippet" href="https://ok.example/post">fine</a>
+      </div>
+    </body></html>`;
+    const fetched: string[] = [];
+    const fetchImpl = (async (input: string | URL | Request) => {
+      const url = String(input);
+      fetched.push(url);
+      if (url.startsWith('https://html.duckduckgo.com/html/'))
+        return new Response(ddgHtml, { status: 200 });
+      return new Response('<p>public body</p>', { status: 200 });
+    }) as typeof fetch;
+    await connect(enabledSettings, fetchImpl);
+    const res = await client.callTool({ name: 'enrich', arguments: { query: 'q' } });
+    const text = (res.content as Array<{ type: string; text: string }>)[0]?.text ?? '{}';
+    const body = JSON.parse(text) as { results: Array<{ url: string }> };
+    expect(body.results.map((r) => r.url)).toEqual(['https://ok.example/post']);
+    expect(fetched).not.toContain('http://169.254.169.254/latest/');
+    expect(store.storage.countObservations()).toBe(1);
+  });
 });
