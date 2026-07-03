@@ -58,7 +58,11 @@ BIN="$PREFIX/bin/cavemem"
 test -x "$BIN" || { echo "bin shim missing"; exit 1; }
 
 # All subsequent commands run in an isolated $HOME so we never touch the real ~/.cavemem
+# or a real XDG data dir — cavemem's home-dir resolution (issue #47) checks
+# CAVEMEM_HOME / XDG_DATA_HOME before falling back to $HOME, either of which
+# could otherwise point outside this sandbox if set in the caller's shell.
 export HOME="$HOME_DIR"
+unset CAVEMEM_HOME XDG_DATA_HOME
 
 echo "==> 6. version (must match apps/cli/package.json#version)"
 EXPECTED_VERSION=$(node -e "console.log(require('$REPO/apps/cli/package.json').version)")
