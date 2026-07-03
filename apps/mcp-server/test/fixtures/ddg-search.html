@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8" />
+  <title>caveman compression at DuckDuckGo</title>
+  <style>.result__a { color: blue; }</style>
+</head>
+<body class="body--html">
+  <div>
+    <form action="/html/" method="post">
+      <input name="q" value="caveman compression" />
+    </form>
+  </div>
+  <div class="serp__results">
+    <div id="links" class="results">
+      <div class="result result--ad">
+        <div class="links_main result__body">
+          <h2 class="result__title">
+            <a rel="noopener" class="result__a" href="https://ads.example.com/sponsored">Sponsored: Buy Rocks</a>
+          </h2>
+          <a class="result__snippet" href="https://ads.example.com/sponsored">An ad that must be ignored.</a>
+        </div>
+      </div>
+      <div class="result results_links results_links_deep web-result">
+        <div class="links_main links_deep result__body">
+          <h2 class="result__title">
+            <a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fguide%3Fref%3Dddg&amp;rut=abc123" class="result__a">Caveman <b>Compression</b> Guide &amp; Reference</a>
+          </h2>
+          <div class="result__extras">
+            <span class="result__url">example.com/guide</span>
+          </div>
+          <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fguide%3Fref%3Dddg&amp;rut=abc123">Learn how <b>caveman</b> grammar saves tokens &#8212; step by step.</a>
+        </div>
+      </div>
+      <div class="result results_links results_links_deep web-result">
+        <div class="links_main links_deep result__body">
+          <h2 class="result__title">
+            <a rel="nofollow" href="https://plain.example.org/post" class="result__a">Plain Link Post</a>
+          </h2>
+          <a class="result__snippet" href="https://plain.example.org/post">A result whose href is already a normal https link.</a>
+        </div>
+      </div>
+      <div class="result results_links results_links_deep web-result">
+        <div class="links_main links_deep result__body">
+          <h2 class="result__title">
+            <a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fguide%3Fref%3Dddg&amp;rut=dupe99" class="result__a">Duplicate Of The First Result</a>
+          </h2>
+          <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fguide%3Fref%3Dddg&amp;rut=dupe99">Same target URL, must be deduped.</a>
+        </div>
+      </div>
+      <div class="result results_links results_links_deep web-result">
+        <div class="links_main links_deep result__body">
+          <h2 class="result__title">
+            <a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fdocs.example.net%2Fintro&amp;rut=xyz789" class="result__a">Third Distinct Result</a>
+          </h2>
+          <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fdocs.example.net%2Fintro&amp;rut=xyz789">Snippet with a non-breaking&nbsp;space and &quot;quotes&quot;.</a>
+        </div>
+      </div>
+      <div class="result results_links results_links_deep web-result">
+        <div class="links_main links_deep result__body">
+          <h2 class="result__title">
+            <a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Ffourth.example.io%2Fpage&amp;rut=f0urth" class="result__a">Fourth Result Beyond The Cap</a>
+          </h2>
+          <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Ffourth.example.io%2Fpage&amp;rut=f0urth">Only surfaces when maxResults allows.</a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="text/javascript">window.tracker = 'must never leak into text';</script>
+</body>
+</html>
