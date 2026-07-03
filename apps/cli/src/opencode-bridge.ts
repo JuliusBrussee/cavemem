@@ -1,5 +1,5 @@
-import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { execFileSync, spawn } from 'node:child_process';
+import { appendFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expand } from '@cavemem/compress';
@@ -83,9 +83,11 @@ function truncate(value: unknown, max = 2000): string {
 
 const LOG_PATH = '/tmp/cavemem-bridge-errors.log';
 
-async function log($: BunShell, msg: string): Promise<void> {
+function log(msg: string): void {
   try {
-    await $`echo '[cavemem-bridge] ${msg}' >> ${LOG_PATH} 2>/dev/null`;
+    // Plain fs append — no subprocess, so this can never itself block the
+    // IDE waiting on a shell round-trip.
+    appendFileSync(LOG_PATH, `[cavemem-bridge] ${msg}\n`);
   } catch {
     // Silent — logging must never break the main flow.
   }
@@ -95,7 +97,7 @@ async function log($: BunShell, msg: string): Promise<void> {
 // Plugin
 /* ------------------------------------------------------------------ */
 
-export default async function cavememBridge({ $, directory }: PluginInput): Promise<Hooks> {
+export default async function cavememBridge({ directory }: PluginInput): Promise<Hooks> {
   const CAVEMEM = resolveCavememCli();
 
   // Track which sessions we have already started so we don't duplicate.
@@ -121,16 +123,22 @@ export default async function cavememBridge({ $, directory }: PluginInput): Prom
   }
 
   async function runHook(name: string, data: Record<string, unknown>): Promise<void> {
-    const json = JSON.stringify(data);
+    // Fire-and-forget: detached + unref so the IDE never waits on the CLI
+    // subprocess (compression, SQLite insert, worker auto-spawn probe). Never
+    // await the child's exit here — that would block every hook-triggering
+    // event on a full `cavemem hook run` round-trip.
     try {
-      // Suppress ALL output so nothing leaks into the TUI.
-      await $`printf '%s' ${json} | ${CAVEMEM} hook run ${name} --ide opencode >/dev/null 2>&1`;
+      const child = spawn(CAVEMEM, ['hook', 'run', name, '--ide', 'opencode'], {
+        stdio: ['pipe', 'ignore', 'ignore'],
+        detached: true,
+      });
+      child.on('error', (err) => log(`hook ${name} spawn failed: ${(err as Error).message}`));
+      child.stdin.on('error', () => {});
+      child.stdin.end(JSON.stringify(data));
+      child.unref();
     } catch (err) {
-      const msg =
-        (err as { stderr?: string; message?: string })?.stderr ||
-        (err as Error)?.message ||
-        String(err);
-      await log($, `hook ${name} failed: ${msg.slice(0, 200)}`);
+      const msg = (err as Error)?.message || String(err);
+      log(`hook ${name} failed: ${msg.slice(0, 200)}`);
     }
   }
 
@@ -155,8 +163,15 @@ export default async function cavememBridge({ $, directory }: PluginInput): Prom
 
     try {
       const sessions = store.storage.listSessions(50);
+      // Scope to the current project directory — otherwise opening OpenCode
+      // in project A can inject summaries from an unrelated project B
+      // session (privacy + relevance bug; see the same fix applied to the
+      // Claude Code session-start handler in #39). Falls back to unscoped
+      // behaviour only if we somehow have no directory to compare against.
       const ended = sessions
-        .filter((s) => s.id !== sessionID && s.ended_at !== null)
+        .filter(
+          (s) => s.id !== sessionID && s.ended_at !== null && (!directory || s.cwd === directory),
+        )
         .sort((a, b) => b.started_at - a.started_at)
         .slice(0, 3);
 
@@ -171,15 +186,15 @@ export default async function cavememBridge({ $, directory }: PluginInput): Prom
         if (text.trim()) hints.push(text.trim());
       }
 
-      await log($, `retrieval for ${sessionID}: ${hints.length} summaries found`);
+      log(`retrieval for ${sessionID}: ${hints.length} summaries found`);
       if (hints.length === 0) return '';
 
       const context = `Prior context (internal): ${hints.join(' | ')}`;
-      await log($, `injected ${context.length} chars`);
+      log(`injected ${context.length} chars`);
       return context;
     } catch (err) {
       const msg = (err as Error)?.message || String(err);
-      await log($, `retrieval error: ${msg}`);
+      log(`retrieval error: ${msg}`);
       return '';
     }
   }
@@ -311,7 +326,7 @@ export default async function cavememBridge({ $, directory }: PluginInput): Prom
         }
       } catch (err) {
         const msg = (err as Error)?.message || String(err);
-        await log($, `event handler crash: ${msg.slice(0, 500)}`);
+        log(`event handler crash: ${msg.slice(0, 500)}`);
       }
     },
 
@@ -326,7 +341,7 @@ export default async function cavememBridge({ $, directory }: PluginInput): Prom
         });
       } catch (err) {
         const msg = (err as Error)?.message || String(err);
-        await log($, `tool.execute.after crash: ${msg.slice(0, 500)}`);
+        log(`tool.execute.after crash: ${msg.slice(0, 500)}`);
       }
     },
 
@@ -343,7 +358,7 @@ export default async function cavememBridge({ $, directory }: PluginInput): Prom
         }
       } catch (err) {
         const msg = (err as Error)?.message || String(err);
-        await log($, `system.transform crash: ${msg.slice(0, 500)}`);
+        log(`system.transform crash: ${msg.slice(0, 500)}`);
       }
     },
   };
