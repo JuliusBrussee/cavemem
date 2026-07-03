@@ -15,6 +15,8 @@ function configFile(ctx: InstallContext): string {
 export const cursor: Installer = {
   id: 'cursor',
   label: 'Cursor',
+  capture: 'none',
+  captureNotes: 'no hooks system — MCP query only',
   async detect(ctx: InstallContext): Promise<boolean> {
     return existsSync(join(ctx.ideConfigDir, '.cursor'));
   },

@@ -78,6 +78,8 @@ function isCavememGroup(ctx: InstallContext, group: AugmentHookGroup): boolean {
 export const augment: Installer = {
   id: 'augment',
   label: 'Augment Code',
+  capture: 'full',
+  captureNotes: 'no UserPromptSubmit event',
   async detect(ctx: InstallContext): Promise<boolean> {
     return existsSync(augmentDir(ctx));
   },

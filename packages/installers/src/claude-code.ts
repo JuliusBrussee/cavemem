@@ -43,6 +43,7 @@ function isCavememHookEntry(entry: ClaudeHookEntry, hookId: string): boolean {
 export const claudeCode: Installer = {
   id: 'claude-code',
   label: 'Claude Code',
+  capture: 'full',
   async detect(ctx: InstallContext): Promise<boolean> {
     return existsSync(join(ctx.ideConfigDir, '.claude'));
   },

@@ -14,6 +14,8 @@ function configFile(ctx: InstallContext): string {
 export const bob: Installer = {
   id: 'bob',
   label: 'IBM Bob',
+  capture: 'none',
+  captureNotes: 'no hooks system — MCP query only',
   async detect(ctx: InstallContext): Promise<boolean> {
     return existsSync(join(ctx.ideConfigDir, '.bob'));
   },
