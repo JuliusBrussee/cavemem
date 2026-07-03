@@ -17,10 +17,10 @@ export interface LibcProbeIO {
 
 /**
  * Detect whether the current Node.js binary is linked against musl libc.
- * @xenova/transformers pulls in `onnxruntime-node`, whose prebuilt binaries
- * target glibc; loading them on Alpine / musl-built Node has segfaulted in
- * the wild (issue #20). We detect early so the failure is a clean error
- * instead of a process abort.
+ * @huggingface/transformers pulls in `onnxruntime-node`, whose prebuilt
+ * binaries target glibc; loading them on Alpine / musl-built Node has
+ * segfaulted in the wild (issue #20). We detect early so the failure is a
+ * clean error instead of a process abort.
  */
 export function detectMusl(io: LibcProbeIO = {}): LibcProbeResult {
   const platform = io.platform ?? process.platform;
