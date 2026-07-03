@@ -102,10 +102,29 @@ export const SettingsSchema = z
         redactSecrets: z
           .boolean()
           .default(true)
-          .describe('Strip content inside <private>…</private> tags before compression.'),
+          .describe(
+            'Scrub secret-shaped substrings (API keys, bearer tokens, passwords, private key blocks) with [REDACTED] before compression.',
+          ),
       })
       .default({ excludePatterns: [], redactSecrets: true })
       .describe('Privacy / redaction.'),
+    capture: z
+      .object({
+        excludeTools: z
+          .array(z.string())
+          .default([])
+          .describe(
+            'Tool names (or globs, e.g. "mcp__broker__*") never captured. Always wins over includeTools.',
+          ),
+        includeTools: z
+          .array(z.string())
+          .default([])
+          .describe(
+            'Tool names (or globs) to capture exclusively. Empty means all tools are captured.',
+          ),
+      })
+      .default({ excludeTools: [], includeTools: [] })
+      .describe('Per-tool capture allowlist/denylist.'),
     ides: z
       .record(z.string(), z.boolean())
       .default({})

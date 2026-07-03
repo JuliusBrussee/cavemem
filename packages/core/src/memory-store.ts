@@ -1,4 +1,4 @@
-import { compress, expand, redactPrivate } from '@cavemem/compress';
+import { compress, expand, redactPrivate, redactSecrets } from '@cavemem/compress';
 import type { Settings } from '@cavemem/config';
 import { type NewObservation, type ObservationRow, Storage } from '@cavemem/storage';
 import { cosine, hybridRank } from './ranker.js';
@@ -50,8 +50,9 @@ export class MemoryStore {
     content: string;
     metadata?: Record<string, unknown>;
   }): number {
-    const redacted = redactPrivate(p.content);
+    let redacted = redactPrivate(p.content);
     if (!redacted.trim()) return -1;
+    if (this.settings.privacy.redactSecrets) redacted = redactSecrets(redacted);
     this.ensureSession(p.session_id);
     const intensity = this.settings.compression.intensity;
     const compressed = compress(redacted, { intensity });
@@ -67,7 +68,10 @@ export class MemoryStore {
   }
 
   addSummary(p: { session_id: string; scope: 'turn' | 'session'; content: string }): number {
-    const redacted = redactPrivate(p.content);
+    let redacted = redactPrivate(p.content);
+    // Summaries echo assistant turn text, which routinely repeats credentials
+    // the agent just read — scrub them like observations.
+    if (this.settings.privacy.redactSecrets) redacted = redactSecrets(redacted);
     this.ensureSession(p.session_id);
     const intensity = this.settings.compression.intensity;
     const out = compress(redacted, { intensity });
