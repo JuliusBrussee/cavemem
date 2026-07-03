@@ -46,6 +46,9 @@ const shipped = {
   main: String(pkg.main).replace(/^\.\//, ''),
   files: ['dist', 'hooks-scripts', 'README.md', 'LICENSE'],
   dependencies: deps,
+  // tsup keeps these external too (e.g. the local embedder); dropping them
+  // here would ship a package that can never load the local provider.
+  ...(pkg.optionalDependencies ? { optionalDependencies: pkg.optionalDependencies } : {}),
 };
 
 writeFileSync(join(out, 'package.json'), `${JSON.stringify(shipped, null, 2)}\n`);
