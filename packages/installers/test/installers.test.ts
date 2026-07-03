@@ -461,6 +461,29 @@ describe('opencode installer', () => {
     expect(existsSync(pluginPath())).toBe(true);
   });
 
+  it('migrates a stale mcpServers.cavemem entry out of the modern config file on install', async () => {
+    // A prior installer version wrote mcpServers.cavemem straight into
+    // ~/.config/opencode/opencode.json (the wrong key — OpenCode expects
+    // `mcp`). Re-running install with the current installer must clean up
+    // that orphaned entry, not just add the new mcp.cavemem key alongside it.
+    mkdirSync(join(home, '.config', 'opencode'), { recursive: true });
+    writeFileSync(
+      cfgPath(),
+      JSON.stringify({
+        mcpServers: { cavemem: { command: 'old', args: ['mcp'] }, keep: { command: '/keep' } },
+      }),
+    );
+
+    await openCode.install(ctx);
+    const cfg = JSON.parse(readFileSync(cfgPath(), 'utf8')) as {
+      mcp: Record<string, unknown>;
+      mcpServers?: Record<string, unknown>;
+    };
+    expect(cfg.mcp.cavemem).toBeDefined();
+    expect(cfg.mcpServers?.cavemem).toBeUndefined();
+    expect(cfg.mcpServers?.keep).toEqual({ command: '/keep' });
+  });
+
   it('preserves unrelated user settings on install + uninstall', async () => {
     mkdirSync(join(home, '.config', 'opencode'), { recursive: true });
     writeFileSync(

@@ -70,6 +70,13 @@ export const openCode: Installer = {
         },
       },
     });
+    // Migrate away from the old `mcpServers` key a prior installer version
+    // wrote into this same file (OpenCode never read it — it expects `mcp`).
+    // Without this, upgrading in place leaves a stale, orphaned entry behind.
+    if (next.mcpServers?.cavemem) {
+      delete next.mcpServers.cavemem;
+      if (Object.keys(next.mcpServers).length === 0) delete next.mcpServers;
+    }
     // Ensure the bundled bridge plugin is listed so OpenCode auto-loads it.
     // Plugins in plugins/ also auto-load, but listing in `plugin` makes intent
     // explicit and survives plugin-dir overrides.
