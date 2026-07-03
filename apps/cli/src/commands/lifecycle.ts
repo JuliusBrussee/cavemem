@@ -54,10 +54,13 @@ function startWorker(silent = false): number | null {
     }
   }
   // Spawn `node <cli> worker run` so Windows doesn't try to exec a .js directly.
+  // `windowsHide` suppresses the console window CreateProcess would otherwise
+  // pop for a detached child on Windows (which hangs `cavemem start`).
   const child = spawn(process.execPath, [resolveCliPath(), 'worker', 'run'], {
     detached: true,
     stdio: 'ignore',
     env: process.env,
+    windowsHide: true,
   });
   child.unref();
   if (child.pid) writeFileSync(pf, String(child.pid));
@@ -147,7 +150,11 @@ export function registerLifecycleCommands(program: Command): void {
       try {
         const first = cmd[0];
         if (!first) throw new Error('no opener');
-        spawn(first, cmd.slice(1), { detached: true, stdio: 'ignore' }).unref();
+        spawn(first, cmd.slice(1), {
+          detached: true,
+          stdio: 'ignore',
+          windowsHide: true,
+        }).unref();
         process.stdout.write(`${kleur.green('opening')} ${url}\n`);
       } catch {
         process.stdout.write(`${url}\n`);

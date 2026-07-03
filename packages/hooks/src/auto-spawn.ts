@@ -39,11 +39,13 @@ export function ensureWorkerRunning(settings: Settings): void {
   try {
     // Spawn `node <cli> worker start` — Windows can't exec a raw .js path
     // (EFTYPE), and `cli` is the .js entry when the hook runs through the
-    // cavemem CLI.
+    // cavemem CLI. `windowsHide` suppresses the console window that
+    // CreateProcess would otherwise pop for the detached child.
     const child = spawn(process.execPath, [cli, 'worker', 'start'], {
       detached: true,
       stdio: 'ignore',
       env: { ...process.env },
+      windowsHide: true,
     });
     child.unref();
   } catch {

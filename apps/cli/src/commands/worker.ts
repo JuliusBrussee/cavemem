@@ -37,10 +37,13 @@ export function registerWorkerCommand(program: Command): void {
       // Spawn `node <cli> worker run` — not `<cli> worker run` — because on
       // Windows the resolved cliPath is the .js file (npm's bin shim points
       // at it), and spawn() can't execute a .js directly → EFTYPE.
+      // `windowsHide` suppresses the console window CreateProcess would
+      // otherwise pop for a detached child on Windows.
       const child = spawn(process.execPath, [resolveCliPath(), 'worker', 'run'], {
         detached: true,
         stdio: 'ignore',
         env: process.env,
+        windowsHide: true,
       });
       child.unref();
       writeFileSync(pf, String(child.pid));
