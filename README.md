@@ -106,11 +106,18 @@ Progressive disclosure: `search` and `timeline` return compact results; `get_obs
 
 ## Settings
 
-`~/.cavemem/settings.json`
+`<cavemem home>/settings.json`, where the cavemem home directory resolves in this order:
+
+1. `CAVEMEM_HOME` env var, if set — used verbatim.
+2. An existing `~/.cavemem` — zero breaking change for current installs.
+3. `XDG_DATA_HOME/cavemem` (or, on Linux with no XDG var, `~/.local/share/cavemem`) for
+   new installs on Linux. macOS/Windows without an explicit XDG var keep `~/.cavemem`.
+
+Run `cavemem doctor` or `cavemem status` to see which directory is actually in use.
 
 | Key | Default | |
 |-----|---------|--|
-| `dataDir` | `"~/.cavemem"` | SQLite location |
+| `dataDir` | resolved cavemem home (above) | SQLite database, models, pidfile, logs — set this to relocate just the data, independent of where `settings.json` lives |
 | `compression.intensity` | `"full"` | `lite` / `full` / `ultra` |
 | `compression.expandForModel` | `false` | Return expanded text to model |
 | `embedding.provider` | `"local"` | `local` / `ollama` / `openai` |
