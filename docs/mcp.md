@@ -1,6 +1,6 @@
 # MCP tools
 
-cavemem exposes four tools over an MCP stdio server. The design goal is **progressive disclosure**: hits are compact until the agent asks for more.
+cavemem exposes four tools over an MCP stdio server, plus an opt-in `enrich` tool. The design goal is **progressive disclosure**: hits are compact until the agent asks for more.
 
 The recommended workflow is a three-layer pattern:
 
@@ -65,6 +65,21 @@ List recent sessions in reverse chronological order.
 ```
 
 Returns: `[ { id, ide, cwd, started_at, ended_at } ]`. Use `id` with `timeline` to navigate within a session.
+
+## `enrich` (opt-in)
+
+Search the web via DuckDuckGo's HTML endpoint, store plain-text extracts of the top results as observations, and return them. **Off by default**: the tool is only registered when `enrich.enabled` is `true` in settings. When it is off, the tool does not exist and cavemem makes no network call, ever. Queries leave the machine only when the user has enabled the setting **and** the agent explicitly calls the tool.
+
+```json
+{
+  "name": "enrich",
+  "input": { "query": "sqlite fts5 bm25 ranking", "note": "researching search ranking" }
+}
+```
+
+Returns: `{ query, results: [ { title, url, extract, observation_id } ], stored_ids }`
+
+Each result page is fetched with a 500 KB byte cap and the `enrich.timeoutMs` timeout, stripped to plain text, and truncated to 2000 characters. Extracts are stored through the normal write path (compressed, privacy-redacted) under a dedicated `enrich` session, with `metadata: { source: "web", url, query, note? }` for provenance. Source URLs are preserved byte-for-byte. `enrich.maxResults` (default 3, max 5) bounds how many results are fetched and stored. If the search fails or nothing can be fetched, the call returns an error and nothing is stored.
 
 ## Contract stability
 
