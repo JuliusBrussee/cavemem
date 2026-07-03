@@ -2,6 +2,7 @@
 import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { redactPrivate, redactSecrets } from '@cavemem/compress';
 import { type Settings, loadSettings, resolveDataDir } from '@cavemem/config';
 import { type Embedder, MemoryStore, createSessionId } from '@cavemem/core';
 import { createEmbedder } from '@cavemem/embedding';
@@ -137,10 +138,17 @@ export function buildServer(
       return enrichSessionId;
     };
 
+    // MemoryStore only redacts observation content; metadata is persisted
+    // verbatim, so scrub query/note here before they reach the metadata column.
+    const scrubMeta = (s: string): string => {
+      const noPrivate = redactPrivate(s);
+      return settings.privacy.redactSecrets ? redactSecrets(noPrivate) : noPrivate;
+    };
+
     server.tool(
       'enrich',
       'Search the web (DuckDuckGo) and store plain-text extracts as memory observations. Opt-in: only available because settings.enrich.enabled is true.',
-      { query: z.string().min(1), note: z.string().optional() },
+      { query: z.string().min(1).max(500), note: z.string().max(2000).optional() },
       async ({ query, note }) => {
         try {
           const results = await enrichQuery(
@@ -158,6 +166,8 @@ export function buildServer(
             };
           }
           const session_id = enrichSession();
+          const metaQuery = scrubMeta(query);
+          const metaNote = note ? scrubMeta(note) : undefined;
           const payload = results.map((r) => ({
             title: r.title,
             url: r.url,
@@ -167,7 +177,12 @@ export function buildServer(
               kind: 'enrichment',
               // Plain URL on its own line — preserved byte-for-byte by the compressor.
               content: `${r.title}\n${r.url}\n\n${r.extract}`,
-              metadata: { source: 'web', url: r.url, query, ...(note ? { note } : {}) },
+              metadata: {
+                source: 'web',
+                url: r.url,
+                query: metaQuery,
+                ...(metaNote ? { note: metaNote } : {}),
+              },
             }),
           }));
           return {
