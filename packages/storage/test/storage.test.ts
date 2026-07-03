@@ -239,7 +239,7 @@ describe('Storage', () => {
     expect(second).toBe(false);
   });
 
-  it('importObservation inserts verbatim at an explicit id and skips on repeat (used by `cavemem import`)', () => {
+  it('importObservation inserts verbatim at an explicit id and skips exact re-imports (used by `cavemem import`)', () => {
     storage.createSession({
       id: 'sess-import',
       ide: 'claude-code',
@@ -257,9 +257,9 @@ describe('Storage', () => {
       ts: Date.now(),
       metadata: null,
     };
-    expect(storage.importObservation(row)).toBe(true);
-    // Re-importing the same id is a no-op, not an overwrite.
-    expect(storage.importObservation({ ...row, content: 'different content' })).toBe(false);
+    expect(storage.importObservation(row)).toBe('inserted');
+    // Same (session_id, ts, content) again → genuine re-import, no-op.
+    expect(storage.importObservation(row)).toBe('skipped');
     const [got] = storage.getObservations([42]);
     expect(got?.content).toBe('auth mw throws 401');
     // The FTS index is kept in sync via the same INSERT trigger as any
@@ -268,6 +268,44 @@ describe('Storage', () => {
     // No embedding row is written, so the observation is eligible for the
     // worker's embedding backfill loop exactly like any freshly-added row.
     expect(storage.observationsMissingEmbeddings(10).map((o) => o.id)).toContain(42);
+  });
+
+  it('importObservation reassigns a fresh id when the exported id belongs to a different observation', () => {
+    storage.createSession({
+      id: 'sess-import-2',
+      ide: 'claude-code',
+      cwd: null,
+      started_at: Date.now(),
+      metadata: null,
+    });
+    // Simulate machine B's own local row occupying the id.
+    const localId = storage.insertObservation({
+      session_id: 'sess-import-2',
+      kind: 'note',
+      content: 'machine B local observation',
+      compressed: true,
+      intensity: 'full',
+    });
+    // Machine A's export also has this id, but different content.
+    const foreign = {
+      id: localId,
+      session_id: 'sess-import-2',
+      kind: 'note',
+      content: 'machine A observation with colliding id',
+      compressed: 1 as const,
+      intensity: 'full',
+      ts: Date.now(),
+      metadata: null,
+    };
+    expect(storage.importObservation(foreign)).toBe('reassigned');
+    // Both observations survive; the local row is untouched.
+    expect(storage.countObservations()).toBe(2);
+    const [local] = storage.getObservations([localId]);
+    expect(local?.content).toBe('machine B local observation');
+    // Re-importing the reassigned record is still a no-op (matched by
+    // content, not by its now-meaningless exported id).
+    expect(storage.importObservation(foreign)).toBe('skipped');
+    expect(storage.countObservations()).toBe(2);
   });
 
   it('transaction rolls back every write when the callback throws', () => {

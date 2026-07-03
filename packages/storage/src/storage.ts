@@ -186,7 +186,7 @@ export class Storage {
   }
 
   /**
-   * Insert an observation with an explicit id and its content verbatim —
+   * Insert an observation from a `cavemem export` file, content verbatim —
    * no compression is applied here. This is the sanctioned exception to
    * "all persisted prose goes through MemoryStore, which compresses it":
    * `cavemem import` replays rows whose `content` already passed through
@@ -195,18 +195,39 @@ export class Storage {
    * its `compression.intensity` setting differs from the source's, which
    * would break byte-identical export → import → export round-trips.
    *
-   * `INSERT OR IGNORE` on the explicit id is the merge-by-id idempotency
-   * `cavemem import` needs: re-importing the same file is a no-op. Returns
-   * true if the row was inserted, false if an observation with that id
-   * already existed (skipped).
+   * Observation ids are per-machine AUTOINCREMENT values with no
+   * cross-device coordination, so the exported id is a *preferred* id,
+   * never an identity — machine A's id=42 and machine B's id=42 are
+   * routinely different observations. Outcomes:
+   * - 'skipped'    — a row with the same (session_id, ts, content) already
+   *   exists anywhere in the table. Matching by content rather than id
+   *   keeps re-imports no-ops even after a previous run reassigned ids.
+   * - 'inserted'   — the exported id was free; row inserted at that id.
+   * - 'reassigned' — the exported id is taken by a different observation;
+   *   row inserted under a fresh AUTOINCREMENT id. Nothing is overwritten.
    */
-  importObservation(o: ObservationRow): boolean {
-    const info = this.db
+  importObservation(o: ObservationRow): 'inserted' | 'skipped' | 'reassigned' {
+    const dup = this.db
       .prepare(
-        'INSERT OR IGNORE INTO observations(id, session_id, kind, content, compressed, intensity, ts, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        'SELECT id FROM observations WHERE session_id = ? AND ts = ? AND content = ? LIMIT 1',
       )
-      .run(o.id, o.session_id, o.kind, o.content, o.compressed, o.intensity, o.ts, o.metadata);
-    return (info.changes ?? 0) > 0;
+      .get(o.session_id, o.ts, o.content);
+    if (dup !== undefined) return 'skipped';
+    const occupant = this.db.prepare('SELECT id FROM observations WHERE id = ?').get(o.id);
+    if (occupant === undefined) {
+      this.db
+        .prepare(
+          'INSERT INTO observations(id, session_id, kind, content, compressed, intensity, ts, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run(o.id, o.session_id, o.kind, o.content, o.compressed, o.intensity, o.ts, o.metadata);
+      return 'inserted';
+    }
+    this.db
+      .prepare(
+        'INSERT INTO observations(session_id, kind, content, compressed, intensity, ts, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(o.session_id, o.kind, o.content, o.compressed, o.intensity, o.ts, o.metadata);
+    return 'reassigned';
   }
 
   getObservations(ids: number[]): ObservationRow[] {

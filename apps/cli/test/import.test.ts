@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { defaultSettings } from '@cavemem/config';
@@ -65,6 +65,7 @@ describe('cavemem import', () => {
       sessionsSkipped: 0,
       observationsImported: 2,
       observationsSkipped: 0,
+      observationsReassigned: 0,
     });
 
     const reExportFile = join(dstDir, 're-export.jsonl');
@@ -104,8 +105,53 @@ describe('cavemem import', () => {
     const second = importJsonl(dstDb, exportFile);
     expect(second.sessionsImported).toBe(0);
     expect(second.observationsImported).toBe(0);
+    expect(second.observationsReassigned).toBe(0);
     expect(second.sessionsSkipped).toBe(first.sessionsImported);
     expect(second.observationsSkipped).toBe(first.observationsImported);
+  });
+
+  it('reassigns a fresh id when an imported id collides with a different local observation (#33)', () => {
+    const srcDb = join(srcDir, 'data.db');
+    seed(srcDb);
+    const exportFile = join(srcDir, 'export.jsonl');
+    exportJsonl(srcDb, exportFile);
+
+    // Destination already has its own locally-created memory: session ids
+    // differ, but observation AUTOINCREMENT ids collide with the export's.
+    const dstDb = join(dstDir, 'data.db');
+    const local = new MemoryStore({ dbPath: dstDb, settings: defaultSettings });
+    local.startSession({ id: 'sess-local', ide: 'test', cwd: '/other' });
+    local.addObservation({
+      session_id: 'sess-local',
+      kind: 'note',
+      content: 'Local observation that already occupies id 1 on this machine.',
+    });
+    local.close();
+
+    const counts = importJsonl(dstDb, exportFile);
+    // One export id collides with the local row → reassigned; the other is free.
+    expect(counts.observationsReassigned).toBe(1);
+    expect(counts.observationsImported).toBe(1);
+    expect(counts.observationsSkipped).toBe(0);
+
+    // Both the local observation and both imported ones survive.
+    const check = new Storage(dstDb);
+    expect(check.countObservations()).toBe(3);
+    const localObs = check.timeline('sess-local', undefined, 10);
+    expect(localObs).toHaveLength(1);
+    expect(localObs[0]?.content).toContain('id 1');
+    expect(check.timeline('sess-a', undefined, 10)).toHaveLength(2);
+    check.close();
+
+    // Re-running the same import is still a no-op, even though one row now
+    // lives under a different id than the export file says.
+    const again = importJsonl(dstDb, exportFile);
+    expect(again.observationsImported).toBe(0);
+    expect(again.observationsReassigned).toBe(0);
+    expect(again.observationsSkipped).toBe(2);
+    const recheck = new Storage(dstDb);
+    expect(recheck.countObservations()).toBe(3);
+    recheck.close();
   });
 
   it('rejects a malformed line, reports the line number, and writes nothing', () => {
@@ -145,6 +191,9 @@ describe('cavemem import', () => {
     const counts = importJsonl(dstDb, exportFile, { dryRun: true });
     expect(counts.sessionsImported).toBe(1);
     expect(counts.observationsImported).toBe(2);
+
+    // Not even an empty data.db is left behind as a side effect.
+    expect(existsSync(dstDb)).toBe(false);
 
     const check = new Storage(dstDb);
     expect(check.listSessions(10)).toHaveLength(0);

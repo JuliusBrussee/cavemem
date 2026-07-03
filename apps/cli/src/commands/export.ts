@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadSettings, resolveDataDir } from '@cavemem/config';
 import { Storage } from '@cavemem/storage';
@@ -12,8 +12,15 @@ export function registerExportCommand(program: Command): void {
     .action(async (out: string) => {
       const settings = loadSettings();
       const dbPath = join(resolveDataDir(settings.dataDir), 'data.db');
-      const { records } = exportJsonl(dbPath, out);
-      process.stdout.write(`wrote ${out} (${records} records)\n`);
+      try {
+        const { records } = exportJsonl(dbPath, out);
+        process.stdout.write(`wrote ${out} (${records} records)\n`);
+      } catch (err) {
+        process.stderr.write(
+          `${kleur.red('cavemem export:')} ${err instanceof Error ? err.message : String(err)}\n`,
+        );
+        process.exitCode = 1;
+      }
     });
 
   program
@@ -38,7 +45,8 @@ export function registerExportCommand(program: Command): void {
         counts.sessionsSynthesized > 0 ? `, ${counts.sessionsSynthesized} synthesized` : '';
       const summary =
         `${counts.sessionsImported} sessions (${counts.sessionsSkipped} skipped${synth}), ` +
-        `${counts.observationsImported} observations (${counts.observationsSkipped} skipped)`;
+        `${counts.observationsImported} observations (${counts.observationsSkipped} skipped, ` +
+        `${counts.observationsReassigned} reassigned)`;
       if (opts.dryRun) {
         process.stdout.write(`${kleur.yellow('dry-run:')} would import ${summary}\n`);
       } else {
@@ -49,6 +57,8 @@ export function registerExportCommand(program: Command): void {
 
 /** Dump every session + observation in `dbPath` to `outFile` as JSONL. */
 export function exportJsonl(dbPath: string, outFile: string): { records: number } {
+  // Fail with a readable message instead of the driver's SQLITE_CANTOPEN.
+  if (!existsSync(dbPath)) throw new Error(`no database at ${dbPath} — nothing to export`);
   const s = new Storage(dbPath, { readonly: true });
   const lines: string[] = [];
   for (const sess of s.listSessions(10000)) {
@@ -68,6 +78,7 @@ export interface ImportCounts {
   sessionsSynthesized: number;
   observationsImported: number;
   observationsSkipped: number;
+  observationsReassigned: number;
 }
 
 /**
@@ -79,14 +90,18 @@ export interface ImportCounts {
  * throws a sentinel at the end of that transaction so it rolls back and
  * nothing is persisted, while still exercising the real insert path).
  *
- * Merge semantics: sessions and observations are merged by id. A record
- * whose id already exists in the target database is skipped, so re-running
- * the same import is a no-op. Observation content is written verbatim
- * (see `Storage.importObservation`) rather than through `MemoryStore`,
- * because it already passed through `@cavemem/compress` on the exporting
- * machine — recompressing it here could change the bytes if the target's
- * `compression.intensity` setting differs, which would break byte-identical
- * round-trips.
+ * Merge semantics: sessions merge by id (already-present ids are skipped).
+ * Observations carry per-machine AUTOINCREMENT ids, so
+ * `Storage.importObservation` treats the exported id as a preference, not
+ * an identity: exact (session_id, ts, content) duplicates are skipped, a
+ * free id is used as-is, and an id occupied by a *different* observation
+ * gets a fresh AUTOINCREMENT id ("reassigned") — nothing is overwritten,
+ * and re-running the same import stays a no-op. Observation content is
+ * written verbatim rather than through `MemoryStore`, because it already
+ * passed through `@cavemem/compress` on the exporting machine —
+ * recompressing it here could change the bytes if the target's
+ * `compression.intensity` setting differs, which would break
+ * byte-identical round-trips.
  */
 export function importJsonl(
   dbPath: string,
@@ -107,13 +122,19 @@ export function importJsonl(
     }
   }
 
-  const s = new Storage(dbPath);
+  // A dry run must not leave an empty data.db behind. When the target
+  // database doesn't exist yet, run the identical write path against an
+  // in-memory database instead — semantically the same as importing into a
+  // fresh dataDir, with nothing touching disk.
+  const target = opts.dryRun && !existsSync(dbPath) ? ':memory:' : dbPath;
+  const s = new Storage(target);
   const counts: ImportCounts = {
     sessionsImported: 0,
     sessionsSkipped: 0,
     sessionsSynthesized: 0,
     observationsImported: 0,
     observationsSkipped: 0,
+    observationsReassigned: 0,
   };
 
   try {
@@ -149,7 +170,7 @@ export function importJsonl(
             });
             if (created) counts.sessionsSynthesized++;
           }
-          const inserted = s.importObservation({
+          const outcome = s.importObservation({
             id: rec.id,
             session_id: rec.session_id,
             kind: rec.kind,
@@ -159,7 +180,8 @@ export function importJsonl(
             ts: rec.ts,
             metadata: rec.metadata,
           });
-          if (inserted) counts.observationsImported++;
+          if (outcome === 'inserted') counts.observationsImported++;
+          else if (outcome === 'reassigned') counts.observationsReassigned++;
           else counts.observationsSkipped++;
         }
       }
