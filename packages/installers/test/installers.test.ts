@@ -12,7 +12,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse as parseToml } from 'smol-toml';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { antigravity } from '../src/antigravity.js';
 import { augment } from '../src/augment.js';
+import { bob } from '../src/bob.js';
 import { claudeCode } from '../src/claude-code.js';
 import { codex } from '../src/codex.js';
 import { copilot } from '../src/copilot.js';
@@ -63,7 +65,17 @@ afterEach(() => {
 describe('registry', () => {
   it('exposes all expected installers', () => {
     expect(Object.keys(installers).sort()).toEqual(
-      ['claude-code', 'codex', 'cursor', 'gemini-cli', 'opencode', 'copilot', 'augment'].sort(),
+      [
+        'claude-code',
+        'codex',
+        'cursor',
+        'gemini-cli',
+        'opencode',
+        'copilot',
+        'augment',
+        'antigravity',
+        'bob',
+      ].sort(),
     );
   });
   it('getInstaller throws on unknown id', () => {
@@ -943,5 +955,73 @@ describe('augment installer', () => {
     expect(await augment.detect(ctx)).toBe(false);
     mkdirSync(join(home, '.augment'));
     expect(await augment.detect(ctx)).toBe(true);
+  });
+});
+
+describe('antigravity installer (query-only)', () => {
+  const cfgPath = () => join(home, '.gemini', 'config', 'mcp_config.json');
+
+  it('writes MCP config and warns that capture is unavailable', async () => {
+    const messages = await antigravity.install(ctx);
+    const cfg = JSON.parse(readFileSync(cfgPath(), 'utf8')) as {
+      mcpServers: Record<string, { command: string; args?: string[] }>;
+    };
+    expect(cfg.mcpServers.cavemem).toEqual({
+      command: ctx.nodeBin,
+      args: [ctx.cliPath, 'mcp'],
+    });
+    expect(messages.some((m) => m.includes('query-only'))).toBe(true);
+  });
+
+  it('preserves other servers and uninstalls cleanly', async () => {
+    mkdirSync(join(home, '.gemini', 'config'), { recursive: true });
+    writeFileSync(cfgPath(), JSON.stringify({ mcpServers: { other: { command: '/x' } } }));
+    await antigravity.install(ctx);
+    await antigravity.uninstall(ctx);
+    const cfg = JSON.parse(readFileSync(cfgPath(), 'utf8')) as {
+      mcpServers: Record<string, unknown>;
+    };
+    expect(cfg.mcpServers.other).toEqual({ command: '/x' });
+    expect(cfg.mcpServers.cavemem).toBeUndefined();
+  });
+
+  it('detect returns true only when ~/.gemini/config exists', async () => {
+    expect(await antigravity.detect(ctx)).toBe(false);
+    mkdirSync(join(home, '.gemini', 'config'), { recursive: true });
+    expect(await antigravity.detect(ctx)).toBe(true);
+  });
+});
+
+describe('bob installer (query-only)', () => {
+  const cfgPath = () => join(home, '.bob', 'mcp.json');
+
+  it('writes MCP config and warns that capture is unavailable', async () => {
+    const messages = await bob.install(ctx);
+    const cfg = JSON.parse(readFileSync(cfgPath(), 'utf8')) as {
+      mcpServers: Record<string, { command: string; args?: string[] }>;
+    };
+    expect(cfg.mcpServers.cavemem).toEqual({
+      command: ctx.nodeBin,
+      args: [ctx.cliPath, 'mcp'],
+    });
+    expect(messages.some((m) => m.includes('query-only'))).toBe(true);
+  });
+
+  it('preserves other servers and uninstalls cleanly', async () => {
+    mkdirSync(join(home, '.bob'), { recursive: true });
+    writeFileSync(cfgPath(), JSON.stringify({ mcpServers: { other: { command: '/x' } } }));
+    await bob.install(ctx);
+    await bob.uninstall(ctx);
+    const cfg = JSON.parse(readFileSync(cfgPath(), 'utf8')) as {
+      mcpServers: Record<string, unknown>;
+    };
+    expect(cfg.mcpServers.other).toEqual({ command: '/x' });
+    expect(cfg.mcpServers.cavemem).toBeUndefined();
+  });
+
+  it('detect returns true only when ~/.bob exists', async () => {
+    expect(await bob.detect(ctx)).toBe(false);
+    mkdirSync(join(home, '.bob'));
+    expect(await bob.detect(ctx)).toBe(true);
   });
 });

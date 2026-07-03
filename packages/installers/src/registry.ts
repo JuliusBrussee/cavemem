@@ -1,4 +1,6 @@
+import { antigravity } from './antigravity.js';
 import { augment } from './augment.js';
+import { bob } from './bob.js';
 import { claudeCode } from './claude-code.js';
 import { codex } from './codex.js';
 import { copilot } from './copilot.js';
@@ -14,7 +16,9 @@ export type IdeName =
   | 'codex'
   | 'cursor'
   | 'copilot'
-  | 'augment';
+  | 'augment'
+  | 'antigravity'
+  | 'bob';
 
 export const installers: Record<IdeName, Installer> = {
   'claude-code': claudeCode,
@@ -24,6 +28,8 @@ export const installers: Record<IdeName, Installer> = {
   cursor,
   copilot,
   augment,
+  antigravity,
+  bob,
 };
 
 export function getInstaller(name: string): Installer {
