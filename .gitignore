@@ -17,3 +17,6 @@ apps/cli/README.md
 apps/cli/LICENSE
 apps/cli/hooks-scripts/
 apps/cli/release/
+
+# Claude Code session artifacts (agent worktrees, settings)
+.claude/
