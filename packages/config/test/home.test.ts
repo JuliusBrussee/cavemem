@@ -103,6 +103,39 @@ describe('resolveCavememHome', () => {
     mkdirSync(join(home, '.cavemem'), { recursive: true });
     expect(resolveCavememHome()).toBe(first);
   });
+
+  it('ignores a relative CAVEMEM_HOME (hooks run with cwd = project dir)', async () => {
+    process.env.CAVEMEM_HOME = './mem';
+    setPlatform('darwin');
+
+    const { resolveCavememHome } = await import('../src/home.js');
+    expect(resolveCavememHome()).toBe(join(home, '.cavemem'));
+  });
+
+  it('ignores a relative XDG_DATA_HOME per the XDG spec', async () => {
+    process.env.XDG_DATA_HOME = 'data';
+    setPlatform('linux');
+
+    const { resolveCavememHome } = await import('../src/home.js');
+    expect(resolveCavememHome()).toBe(join(home, '.local', 'share', 'cavemem'));
+  });
+
+  it('honors an explicit XDG_DATA_HOME on macOS too (no legacy dir)', async () => {
+    const xdg = join(home, 'xdg-data');
+    process.env.XDG_DATA_HOME = xdg;
+    setPlatform('darwin');
+
+    const { resolveCavememHome } = await import('../src/home.js');
+    expect(resolveCavememHome()).toBe(join(xdg, 'cavemem'));
+  });
+
+  it('expands a ~-prefixed CAVEMEM_HOME against the home dir', async () => {
+    process.env.CAVEMEM_HOME = '~/custom-home';
+    setPlatform('darwin');
+
+    const { resolveCavememHome } = await import('../src/home.js');
+    expect(resolveCavememHome()).toBe(join(home, 'custom-home'));
+  });
 });
 
 describe('SettingsSchema dataDir default', () => {
