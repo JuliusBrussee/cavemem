@@ -16,13 +16,16 @@ import { registerStatusCommand } from './commands/status.js';
 import { registerUninstallCommand } from './commands/uninstall.js';
 import { registerWorkerCommand } from './commands/worker.js';
 
+declare const __CAVEMEM_VERSION__: string;
+const VERSION = typeof __CAVEMEM_VERSION__ !== 'undefined' ? __CAVEMEM_VERSION__ : '0.0.0';
+
 export function createProgram(): Command {
   const program = new Command();
 
   program
     .name('cavemem')
     .description('Cross-agent persistent memory with compressed storage.')
-    .version(__CAVEMEM_VERSION__);
+    .version(VERSION);
 
   registerInstallCommand(program);
   registerUninstallCommand(program);
