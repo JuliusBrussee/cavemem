@@ -117,9 +117,12 @@ Progressive disclosure: `search` and `timeline` return compact results; `get_obs
 | `workerPort` | `37777` | Local viewer port |
 | `search.alpha` | `0.5` | BM25 / vector blend |
 | `search.defaultLimit` | `10` | Default result count |
-| `privacy.excludePatterns` | `[]` | Paths never captured |
+| `privacy.excludePatterns` | `[]` | Path globs (e.g. `["**/.env", "**/secrets/**"]`) never captured |
+| `privacy.redactSecrets` | `true` | Scrub secret-shaped substrings (API keys, tokens, passwords) with `[REDACTED]` |
+| `capture.excludeTools` | `[]` | Tool names/globs never captured; wins over `includeTools` |
+| `capture.includeTools` | `[]` | If non-empty, only these tool names/globs are captured |
 
-Content inside `<private>...</private>` is stripped before write. Paths matching `excludePatterns` are never read. The worker binds to `127.0.0.1` only.
+Content inside `<private>...</private>` is stripped before write. Paths matching `excludePatterns` are never captured into memory, whether they appear in a tool's `file_path`/`path`/`notebook_path` field or embedded in a command string. The worker binds to `127.0.0.1` only.
 
 ---
 
