@@ -25,6 +25,7 @@ interface Stmt {
 interface DbHandle {
   runSchema(sql: string): void;
   prepare(sql: string): Stmt;
+  transaction<T>(fn: () => T): T;
   close(): void;
 }
 
@@ -32,7 +33,12 @@ interface DbHandle {
 type Bs3Constructor = new (
   path: string,
   opts?: { readonly?: boolean },
-) => { exec(sql: string): void; prepare(sql: string): unknown; close(): void };
+) => {
+  exec(sql: string): void;
+  prepare(sql: string): unknown;
+  transaction(fn: () => unknown): () => unknown;
+  close(): void;
+};
 
 const _req = createRequire(import.meta.url);
 export const isBun = !!(typeof process !== 'undefined' && process.versions && process.versions.bun);
@@ -72,6 +78,20 @@ function openDb(dbPath: string, opts: { readonly?: boolean } = {}): DbHandle {
           all: (...a) => s.all(...a),
         };
       },
+      // bun:sqlite has Database.transaction(fn) too, but prepared
+      // BEGIN/COMMIT/ROLLBACK keeps the adapter's inline driver type minimal
+      // and behaves identically for the non-nested transactions Storage runs.
+      transaction: <T>(fn: () => T): T => {
+        db.prepare('BEGIN').run();
+        try {
+          const out = fn();
+          db.prepare('COMMIT').run();
+          return out;
+        } catch (err) {
+          db.prepare('ROLLBACK').run();
+          throw err;
+        }
+      },
     };
   }
   // Node: load better-sqlite3 native addon.
@@ -82,6 +102,7 @@ function openDb(dbPath: string, opts: { readonly?: boolean } = {}): DbHandle {
       db.exec(sql);
     },
     prepare: (sql) => db.prepare(sql) as unknown as Stmt,
+    transaction: <T>(fn: () => T): T => db.transaction(fn)() as T,
     close: () => db.close(),
   };
 }
@@ -96,23 +117,39 @@ export class Storage {
   constructor(dbPath: string, opts: StorageOptions = {}) {
     mkdirSync(dirname(dbPath), { recursive: true });
     this.db = openDb(dbPath, opts);
-    this.db.runSchema(SCHEMA_SQL);
+    // SCHEMA_SQL ends in a genuine `INSERT OR IGNORE`, which a read-only
+    // connection rejects outright even when the row already exists. Readonly
+    // mode is only ever used against a database an earlier writable Storage
+    // has already initialized (e.g. `cavemem export`), so skip it here.
+    if (!opts.readonly) this.db.runSchema(SCHEMA_SQL);
   }
 
   close(): void {
     this.db.close();
   }
 
+  /**
+   * Run `fn` inside a single SQLite transaction. If `fn` throws, every write
+   * made inside it is rolled back and the error propagates — `cavemem import`
+   * uses this so a mid-file failure leaves the database untouched.
+   */
+  transaction<T>(fn: () => T): T {
+    return this.db.transaction(fn);
+  }
+
   // --- sessions ---
 
-  createSession(s: Omit<SessionRow, 'ended_at'>): void {
+  createSession(s: Omit<SessionRow, 'ended_at'>): boolean {
     // INSERT OR IGNORE: SessionStart re-fires on resume/clear/compact with the
     // same session_id, and we want the original row (and ended_at=null) preserved.
-    this.db
+    // The boolean return (row inserted vs already present) also gives
+    // `cavemem import` merge-by-id idempotency for free.
+    const info = this.db
       .prepare(
         'INSERT OR IGNORE INTO sessions(id, ide, cwd, started_at, metadata) VALUES (?, ?, ?, ?, ?)',
       )
       .run(s.id, s.ide, s.cwd, s.started_at, s.metadata);
+    return (info.changes ?? 0) > 0;
   }
 
   endSession(id: string, ts = Date.now()): void {
@@ -146,6 +183,51 @@ export class Storage {
       o.metadata ? JSON.stringify(o.metadata) : null,
     );
     return Number(info.lastInsertRowid);
+  }
+
+  /**
+   * Insert an observation from a `cavemem export` file, content verbatim —
+   * no compression is applied here. This is the sanctioned exception to
+   * "all persisted prose goes through MemoryStore, which compresses it":
+   * `cavemem import` replays rows whose `content` already passed through
+   * `@cavemem/compress` once, on the machine that produced the export.
+   * Recompressing on the target machine could produce different bytes if
+   * its `compression.intensity` setting differs from the source's, which
+   * would break byte-identical export → import → export round-trips.
+   *
+   * Observation ids are per-machine AUTOINCREMENT values with no
+   * cross-device coordination, so the exported id is a *preferred* id,
+   * never an identity — machine A's id=42 and machine B's id=42 are
+   * routinely different observations. Outcomes:
+   * - 'skipped'    — a row with the same (session_id, ts, content) already
+   *   exists anywhere in the table. Matching by content rather than id
+   *   keeps re-imports no-ops even after a previous run reassigned ids.
+   * - 'inserted'   — the exported id was free; row inserted at that id.
+   * - 'reassigned' — the exported id is taken by a different observation;
+   *   row inserted under a fresh AUTOINCREMENT id. Nothing is overwritten.
+   */
+  importObservation(o: ObservationRow): 'inserted' | 'skipped' | 'reassigned' {
+    const dup = this.db
+      .prepare(
+        'SELECT id FROM observations WHERE session_id = ? AND ts = ? AND content = ? LIMIT 1',
+      )
+      .get(o.session_id, o.ts, o.content);
+    if (dup !== undefined) return 'skipped';
+    const occupant = this.db.prepare('SELECT id FROM observations WHERE id = ?').get(o.id);
+    if (occupant === undefined) {
+      this.db
+        .prepare(
+          'INSERT INTO observations(id, session_id, kind, content, compressed, intensity, ts, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run(o.id, o.session_id, o.kind, o.content, o.compressed, o.intensity, o.ts, o.metadata);
+      return 'inserted';
+    }
+    this.db
+      .prepare(
+        'INSERT INTO observations(session_id, kind, content, compressed, intensity, ts, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(o.session_id, o.kind, o.content, o.compressed, o.intensity, o.ts, o.metadata);
+    return 'reassigned';
   }
 
   getObservations(ids: number[]): ObservationRow[] {
