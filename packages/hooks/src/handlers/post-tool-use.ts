@@ -82,7 +82,11 @@ function collectPathFields(value: unknown, out: string[]): void {
 function safeStringify(v: unknown): string {
   if (v == null) return '';
   try {
-    return JSON.stringify(v);
+    // Cap giant leaf strings during serialization — a multi-MB file payload
+    // should not pay full stringify cost only to be sliced afterwards.
+    return JSON.stringify(v, (_key, val) =>
+      typeof val === 'string' && val.length > MAX_SCAN_LEN ? val.slice(0, MAX_SCAN_LEN) : val,
+    );
   } catch {
     return '';
   }
