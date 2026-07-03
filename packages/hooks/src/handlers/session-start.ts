@@ -12,9 +12,12 @@ export async function sessionStart(store: MemoryStore, input: HookInput): Promis
   // For resume/clear/compact the agent already has its own context; injecting
   // a "Prior-session context" preface would be noisy and possibly stale.
   if (input.source && input.source !== 'startup') return '';
-  const recent = store.storage.listSessions(4);
+  // Widen the initial fetch so we have headroom after cwd filtering; without
+  // this we'd routinely return zero hints for a project that hasn't been the
+  // most recent on the machine. (See #39.)
+  const recent = store.storage.listSessions(20);
   const hints = recent
-    .filter((s) => s.id !== input.session_id)
+    .filter((s) => s.id !== input.session_id && (!input.cwd || s.cwd === input.cwd))
     .slice(0, 3)
     .map((s) => {
       const summaries = store.storage.listSummaries(s.id).slice(0, 1);

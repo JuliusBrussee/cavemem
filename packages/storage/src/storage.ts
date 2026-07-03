@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
-import Database from 'better-sqlite3';
 import { SCHEMA_SQL } from './schema.js';
 import type {
   NewObservation,
@@ -11,17 +11,92 @@ import type {
   SummaryRow,
 } from './types.js';
 
+// Minimal interface satisfied by both better-sqlite3 (Node) and bun:sqlite (Bun).
+interface RunResult {
+  lastInsertRowid: number | bigint;
+  changes?: number;
+}
+interface Stmt {
+  run(...args: unknown[]): RunResult;
+  // Returns undefined (not null) regardless of backend.
+  get(...args: unknown[]): unknown;
+  all(...args: unknown[]): unknown[];
+}
+interface DbHandle {
+  runSchema(sql: string): void;
+  prepare(sql: string): Stmt;
+  close(): void;
+}
+
+// Inline constructor type — avoids import type + typeof controversy with export= modules.
+type Bs3Constructor = new (
+  path: string,
+  opts?: { readonly?: boolean },
+) => { exec(sql: string): void; prepare(sql: string): unknown; close(): void };
+
+const _req = createRequire(import.meta.url);
+export const isBun = !!(typeof process !== 'undefined' && process.versions && process.versions.bun);
+
+// bun:sqlite returns null on no-match; better-sqlite3 returns undefined.
+// Normalise to undefined so callers don't need to know which backend is active.
+export function normalizeBunGet(result: unknown): unknown {
+  return result === null ? undefined : result;
+}
+
+function openDb(dbPath: string, opts: { readonly?: boolean } = {}): DbHandle {
+  if (isBun) {
+    // bun:sqlite is a Bun built-in; not available on Node.
+    const { Database: BunDb } = _req('bun:sqlite') as {
+      Database: new (
+        path: string,
+        opts?: { readonly?: boolean },
+      ) => {
+        exec(sql: string): void;
+        prepare(sql: string): {
+          run(...a: unknown[]): { lastInsertRowid: number; changes: number };
+          get(...a: unknown[]): unknown;
+          all(...a: unknown[]): unknown[];
+        };
+        close(): void;
+      };
+    };
+    const db = new BunDb(dbPath, opts.readonly ? { readonly: true } : undefined);
+    return {
+      runSchema: (sql) => db.exec(sql),
+      close: () => db.close(),
+      prepare: (sql) => {
+        const s = db.prepare(sql);
+        return {
+          run: (...a) => s.run(...a),
+          get: (...a) => normalizeBunGet(s.get(...a)),
+          all: (...a) => s.all(...a),
+        };
+      },
+    };
+  }
+  // Node: load better-sqlite3 native addon.
+  const Db = _req('better-sqlite3') as Bs3Constructor;
+  const db = new Db(dbPath, opts.readonly ? { readonly: true } : {});
+  return {
+    runSchema: (sql) => {
+      db.exec(sql);
+    },
+    prepare: (sql) => db.prepare(sql) as unknown as Stmt,
+    close: () => db.close(),
+  };
+}
+
 export interface StorageOptions {
   readonly?: boolean;
 }
 
 export class Storage {
-  private db: Database.Database;
+  private db: DbHandle;
 
   constructor(dbPath: string, opts: StorageOptions = {}) {
     mkdirSync(dirname(dbPath), { recursive: true });
-    this.db = new Database(dbPath, opts.readonly ? { readonly: true } : {});
-    this.db.exec(SCHEMA_SQL);
+    this.db = openDb(dbPath, opts);
+    this.db.runSchema(SCHEMA_SQL);
   }
 
   close(): void {
@@ -130,20 +205,40 @@ export class Storage {
 
   // --- search (BM25 via FTS5) ---
 
-  searchFts(query: string, limit = 10): SearchHit[] {
+  // Rebuilds the FTS5 index from the observations table. Goes through
+  // prepare/run (not runSchema/exec) so it works identically on both backends.
+  rebuildFts(): void {
+    this.db.prepare("INSERT INTO observations_fts(observations_fts) VALUES('rebuild');").run();
+  }
+
+  /**
+   * BM25 search over the observations FTS index. If `cwd` is supplied, results
+   * are restricted to observations whose session was opened in that cwd —
+   * scoping search to a single project so memory from project A does not leak
+   * into project B (see #39).
+   */
+  searchFts(query: string, limit = 10, cwd?: string | null): SearchHit[] {
     if (!query.trim()) return [];
-    const rows = this.db
-      .prepare(
-        `SELECT o.id, o.session_id, o.ts,
+    const sql = cwd
+      ? `SELECT o.id, o.session_id, o.ts,
+                snippet(observations_fts, 0, '[', ']', '…', 16) AS snippet,
+                bm25(observations_fts) AS score
+         FROM observations_fts
+         JOIN observations o ON o.id = observations_fts.rowid
+         JOIN sessions s ON s.id = o.session_id
+         WHERE observations_fts MATCH ? AND s.cwd = ?
+         ORDER BY score ASC
+         LIMIT ?`
+      : `SELECT o.id, o.session_id, o.ts,
                 snippet(observations_fts, 0, '[', ']', '…', 16) AS snippet,
                 bm25(observations_fts) AS score
          FROM observations_fts
          JOIN observations o ON o.id = observations_fts.rowid
          WHERE observations_fts MATCH ?
          ORDER BY score ASC
-         LIMIT ?`,
-      )
-      .all(sanitizeMatch(query), limit) as Array<{
+         LIMIT ?`;
+    const params = cwd ? [sanitizeMatch(query), cwd, limit] : [sanitizeMatch(query), limit];
+    const rows = this.db.prepare(sql).all(...params) as Array<{
       id: number;
       session_id: string;
       ts: number;
@@ -240,7 +335,7 @@ export class Storage {
    */
   dropEmbeddingsWhereModelNot(model: string): number {
     const info = this.db.prepare('DELETE FROM embeddings WHERE model != ?').run(model);
-    return Number(info.changes);
+    return Number(info.changes ?? 0);
   }
 
   countObservations(): number {
@@ -267,7 +362,8 @@ export class Storage {
   }
 }
 
-function sanitizeMatch(q: string): string {
+// Exported for testing.
+export function sanitizeMatch(q: string): string {
   // Escape double quotes and wrap each bare term to avoid FTS5 syntax errors.
   return q
     .split(/\s+/)

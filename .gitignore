@@ -12,6 +12,7 @@ coverage
 ~/.cavemem
 .cavemem-dev
 .e2e/
+.forge/
 apps/cli/README.md
 apps/cli/LICENSE
 apps/cli/hooks-scripts/

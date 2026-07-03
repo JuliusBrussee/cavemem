@@ -18,11 +18,15 @@ export function writeJson(path: string, data: unknown): void {
 /**
  * Quote a path for embedding into a shell command string (e.g., Claude
  * Code hook `command` fields). Wraps in double quotes unless the path is
- * already a bare token with no whitespace or shell metacharacters. On
- * Windows, double quotes also protect backslashes from being consumed.
+ * already a bare token with no whitespace, shell metacharacters, or
+ * backslashes. Backslashes are excluded from the bare-token whitelist
+ * because MSYS-bash (the shell Claude Code uses on Windows when launched
+ * from the desktop app) treats unquoted backslashes as escape introducers
+ * and strips them. Double-quoted, both cmd.exe and MSYS-bash preserve
+ * backslashes verbatim.
  */
 export function shellQuote(p: string): string {
-  if (/^[\w@%+=:,./\\-]+$/.test(p)) return p;
+  if (/^[\w@%+=:,./-]+$/.test(p)) return p;
   return `"${p.replace(/"/g, '\\"')}"`;
 }
 

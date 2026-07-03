@@ -93,6 +93,64 @@ describe('runHook', () => {
     expect(store.storage.getSession('sess-d')?.ended_at).not.toBeNull();
   });
 
+  it('session-start prior-session context is scoped to the current cwd (#39)', async () => {
+    // Old project session — different cwd.
+    await runHook(
+      'session-start',
+      { session_id: 'old-A', ide: 'claude-code', cwd: '/work/project-A', source: 'startup' },
+      { store },
+    );
+    await runHook(
+      'stop',
+      { session_id: 'old-A', ide: 'claude-code', turn_summary: 'shipped feature A' },
+      { store },
+    );
+    await runHook('session-end', { session_id: 'old-A', ide: 'claude-code' }, { store });
+
+    // New session in a different project — must NOT see old-A's context.
+    const newSession = await runHook(
+      'session-start',
+      { session_id: 'new-B', ide: 'claude-code', cwd: '/work/project-B', source: 'startup' },
+      { store },
+    );
+    expect(newSession.context).toBe('');
+  });
+
+  it('session-start prior-session context surfaces same-cwd sessions (#39)', async () => {
+    // Two prior sessions in the same project, plus an unrelated one.
+    await runHook(
+      'session-start',
+      { session_id: 'prev-A', ide: 'claude-code', cwd: '/work/project-A', source: 'startup' },
+      { store },
+    );
+    await runHook(
+      'stop',
+      { session_id: 'prev-A', ide: 'claude-code', turn_summary: 'wrote tests for parser' },
+      { store },
+    );
+    await runHook('session-end', { session_id: 'prev-A', ide: 'claude-code' }, { store });
+
+    await runHook(
+      'session-start',
+      { session_id: 'unrelated', ide: 'claude-code', cwd: '/work/other', source: 'startup' },
+      { store },
+    );
+    await runHook(
+      'stop',
+      { session_id: 'unrelated', ide: 'claude-code', turn_summary: 'noise from other project' },
+      { store },
+    );
+    await runHook('session-end', { session_id: 'unrelated', ide: 'claude-code' }, { store });
+
+    const r = await runHook(
+      'session-start',
+      { session_id: 'next-A', ide: 'claude-code', cwd: '/work/project-A', source: 'startup' },
+      { store },
+    );
+    expect(r.context).toContain('wrote tests for parser');
+    expect(r.context).not.toContain('noise from other project');
+  });
+
   it('session-start is idempotent across resume/clear/compact', async () => {
     const a = await runHook(
       'session-start',

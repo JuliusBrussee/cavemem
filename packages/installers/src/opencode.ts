@@ -6,7 +6,6 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { deepMerge, readJson, writeJson } from './fs-utils.js';
 import type { InstallContext, Installer } from './types.js';
@@ -24,42 +23,43 @@ interface OpenCodeConfig {
   plugin?: string[];
 }
 
-function configRoot(): string {
+function configRoot(ctx: InstallContext): string {
   // Per OpenCode docs, the user-global config dir is ~/.config/opencode/.
   // We honor XDG_CONFIG_HOME if set.
   const xdg = process.env.XDG_CONFIG_HOME;
-  return xdg ? join(xdg, 'opencode') : join(homedir(), '.config', 'opencode');
+  return xdg ? join(xdg, 'opencode') : join(ctx.ideConfigDir, '.config', 'opencode');
 }
 
-function configFile(): string {
-  return join(configRoot(), 'opencode.json');
+function configFile(ctx: InstallContext): string {
+  return join(configRoot(ctx), 'opencode.json');
 }
 
-function pluginDir(): string {
-  return join(configRoot(), 'plugins');
+function pluginDir(ctx: InstallContext): string {
+  return join(configRoot(ctx), 'plugins');
 }
 
-function pluginLink(): string {
-  return join(pluginDir(), 'cavemem.js');
+function pluginLink(ctx: InstallContext): string {
+  return join(pluginDir(ctx), 'cavemem.js');
 }
 
-// Legacy config path used by earlier versions of the installer.
-function legacyConfigFile(): string {
-  return join(homedir(), '.opencode', 'config.json');
+// Legacy locations from earlier versions of this installer. Cleaned up on
+// uninstall so users don't end up with stale files.
+function legacyConfigFile(ctx: InstallContext): string {
+  return join(ctx.ideConfigDir, '.opencode', 'config.json');
 }
 
 export const openCode: Installer = {
   id: 'opencode',
   label: 'OpenCode',
-  async detect(_ctx): Promise<boolean> {
+  async detect(ctx: InstallContext): Promise<boolean> {
     // Prefer the modern XDG path; fall back to the legacy dot-dir.
-    return existsSync(configRoot()) || existsSync(join(homedir(), '.opencode'));
+    return existsSync(configRoot(ctx)) || existsSync(join(ctx.ideConfigDir, '.opencode'));
   },
   async install(ctx: InstallContext): Promise<string[]> {
     const messages: string[] = [];
 
     // 1. Write MCP config to the correct OpenCode config file.
-    const path = configFile();
+    const path = configFile(ctx);
     const current = readJson<OpenCodeConfig>(path, {});
     const next = deepMerge<OpenCodeConfig>(current, {
       mcp: {
@@ -87,8 +87,8 @@ export const openCode: Installer = {
 
     // 2. Symlink the bridge plugin into the OpenCode plugins directory.
     const bridgeSource = join(dirname(ctx.cliPath), 'opencodeBridge.js');
-    const pluginsDir = pluginDir();
-    const link = pluginLink();
+    const pluginsDir = pluginDir(ctx);
+    const link = pluginLink(ctx);
     mkdirSync(pluginsDir, { recursive: true });
 
     if (existsSync(link)) {
@@ -99,7 +99,7 @@ export const openCode: Installer = {
     messages.push(`symlinked bridge plugin ${link} -> ${bridgeSource}`);
 
     // 3. Clean up legacy config if it still has a stale mcpServers entry.
-    const legacyFile = legacyConfigFile();
+    const legacyFile = legacyConfigFile(ctx);
     if (existsSync(legacyFile)) {
       try {
         const legacy = JSON.parse(readFileSync(legacyFile, 'utf8')) as {
@@ -117,12 +117,12 @@ export const openCode: Installer = {
 
     return messages;
   },
-  async uninstall(_ctx): Promise<string[]> {
+  async uninstall(ctx: InstallContext): Promise<string[]> {
     const messages: string[] = [];
 
     // 1. Remove MCP config and plugin entry from modern path.
-    const cfgPath = configFile();
-    const legacyFile = legacyConfigFile();
+    const cfgPath = configFile(ctx);
+    const legacyFile = legacyConfigFile(ctx);
 
     for (const path of [cfgPath, legacyFile]) {
       if (!existsSync(path)) continue;
@@ -144,7 +144,7 @@ export const openCode: Installer = {
     }
 
     // 2. Remove bridge plugin symlink.
-    const link = pluginLink();
+    const link = pluginLink(ctx);
     if (existsSync(link)) {
       unlinkSync(link);
       messages.push(`removed plugin symlink ${link}`);

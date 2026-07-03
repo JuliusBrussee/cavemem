@@ -58,6 +58,44 @@ describe('Storage', () => {
     expect(hits[0]?.snippet).toContain('[auth]');
   });
 
+  it('FTS search scopes results to cwd when provided (#39)', () => {
+    storage.createSession({
+      id: 'proj-A',
+      ide: 'claude-code',
+      cwd: '/work/A',
+      started_at: Date.now(),
+      metadata: null,
+    });
+    storage.createSession({
+      id: 'proj-B',
+      ide: 'claude-code',
+      cwd: '/work/B',
+      started_at: Date.now(),
+      metadata: null,
+    });
+    storage.insertObservation({
+      session_id: 'proj-A',
+      kind: 'note',
+      content: 'shared keyword in project A',
+      compressed: true,
+      intensity: 'full',
+    });
+    storage.insertObservation({
+      session_id: 'proj-B',
+      kind: 'note',
+      content: 'shared keyword in project B',
+      compressed: true,
+      intensity: 'full',
+    });
+    expect(storage.searchFts('keyword').length).toBe(2);
+    const scopedA = storage.searchFts('keyword', 10, '/work/A');
+    expect(scopedA).toHaveLength(1);
+    expect(scopedA[0]?.session_id).toBe('proj-A');
+    const scopedB = storage.searchFts('keyword', 10, '/work/B');
+    expect(scopedB).toHaveLength(1);
+    expect(scopedB[0]?.session_id).toBe('proj-B');
+  });
+
   it('stores and retrieves embeddings', () => {
     storage.createSession({
       id: 's2',
