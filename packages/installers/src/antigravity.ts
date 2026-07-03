@@ -30,8 +30,12 @@ export const antigravity: Installer = {
   },
   async uninstall(ctx: InstallContext): Promise<string[]> {
     const path = configFile(ctx);
+    if (!existsSync(path)) return [];
     const current = readJson<AntigravityMcpConfig>(path, {});
-    if (current.mcpServers) delete current.mcpServers.cavemem;
+    if (current.mcpServers) {
+      delete current.mcpServers.cavemem;
+      if (Object.keys(current.mcpServers).length === 0) delete current.mcpServers;
+    }
     writeJson(path, current);
     return [`updated ${path}`];
   },

@@ -814,6 +814,26 @@ describe('copilot installer', () => {
     }
   });
 
+  it('quotes paths with spaces in hook command strings (Windows)', async () => {
+    const winCtx: InstallContext = {
+      ideConfigDir: home,
+      cliPath: 'C:\\Users\\Some User\\AppData\\Roaming\\npm\\node_modules\\cavemem\\dist\\index.js',
+      nodeBin: 'C:\\Program Files\\nodejs\\node.exe',
+      dataDir: join(home, '.cavemem'),
+    };
+    // Pin the linux mcp.json branch — only the hook command quoting is under
+    // test; the path strings are opaque to join().
+    await withPlatform('linux', async () => {
+      await copilot.install(winCtx);
+    });
+    const hooks = JSON.parse(readFileSync(hooksPath(), 'utf8')) as {
+      hooks: Record<string, Array<{ command: string }>>;
+    };
+    expect(hooks.hooks.SessionStart?.[0]?.command).toBe(
+      `"${winCtx.nodeBin}" "${winCtx.cliPath}" hook run session-start --ide copilot`,
+    );
+  });
+
   it('detect returns true only when ~/.copilot exists', async () => {
     expect(await copilot.detect(ctx)).toBe(false);
     mkdirSync(join(home, '.copilot'));
@@ -985,6 +1005,21 @@ describe('antigravity installer (query-only)', () => {
     expect(cfg.mcpServers.cavemem).toBeUndefined();
   });
 
+  it('uninstall without a config file writes nothing', async () => {
+    const messages = await antigravity.uninstall(ctx);
+    expect(messages).toEqual([]);
+    expect(existsSync(cfgPath())).toBe(false);
+  });
+
+  it('uninstall drops the mcpServers key when it becomes empty', async () => {
+    await antigravity.install(ctx);
+    await antigravity.uninstall(ctx);
+    const cfg = JSON.parse(readFileSync(cfgPath(), 'utf8')) as {
+      mcpServers?: Record<string, unknown>;
+    };
+    expect(cfg.mcpServers).toBeUndefined();
+  });
+
   it('detect returns true only when ~/.gemini/config exists', async () => {
     expect(await antigravity.detect(ctx)).toBe(false);
     mkdirSync(join(home, '.gemini', 'config'), { recursive: true });
@@ -1017,6 +1052,21 @@ describe('bob installer (query-only)', () => {
     };
     expect(cfg.mcpServers.other).toEqual({ command: '/x' });
     expect(cfg.mcpServers.cavemem).toBeUndefined();
+  });
+
+  it('uninstall without a config file writes nothing', async () => {
+    const messages = await bob.uninstall(ctx);
+    expect(messages).toEqual([]);
+    expect(existsSync(cfgPath())).toBe(false);
+  });
+
+  it('uninstall drops the mcpServers key when it becomes empty', async () => {
+    await bob.install(ctx);
+    await bob.uninstall(ctx);
+    const cfg = JSON.parse(readFileSync(cfgPath(), 'utf8')) as {
+      mcpServers?: Record<string, unknown>;
+    };
+    expect(cfg.mcpServers).toBeUndefined();
   });
 
   it('detect returns true only when ~/.bob exists', async () => {

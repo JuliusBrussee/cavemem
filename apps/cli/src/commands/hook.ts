@@ -78,8 +78,8 @@ function writeIdeOutput(hook: HookName, result: HookResult): void {
 // (conversation_id, workspace_roots, and assistant text nested under
 // `conversation` — present only when the installer sets
 // metadata.includeConversationData on the Stop hook). Translate them here so
-// packages/hooks stays IDE-agnostic.
-function normalizeForIde(
+// packages/hooks stays IDE-agnostic. Exported for tests.
+export function normalizeForIde(
   ide: string | undefined,
   parsed: Record<string, unknown>,
 ): Record<string, unknown> {
