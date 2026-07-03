@@ -13,6 +13,7 @@ import { parse as parseToml } from 'smol-toml';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { claudeCode } from '../src/claude-code.js';
 import { codex } from '../src/codex.js';
+import { copilot } from '../src/copilot.js';
 import { cursor } from '../src/cursor.js';
 import { deepMerge } from '../src/fs-utils.js';
 import { openCode } from '../src/opencode.js';
@@ -60,7 +61,7 @@ afterEach(() => {
 describe('registry', () => {
   it('exposes all expected installers', () => {
     expect(Object.keys(installers).sort()).toEqual(
-      ['claude-code', 'codex', 'cursor', 'gemini-cli', 'opencode'].sort(),
+      ['claude-code', 'codex', 'cursor', 'gemini-cli', 'opencode', 'copilot'].sort(),
     );
   });
   it('getInstaller throws on unknown id', () => {
@@ -614,5 +615,194 @@ describe('checkWindowsSh (#56)', () => {
 
   it('resolveShDefault returns a boolean without throwing', () => {
     expect(typeof resolveShDefault()).toBe('boolean');
+  });
+});
+
+// vscodeUserDir/wrapper emission branch on process.platform, which vitest
+// cannot set via env — swap the property for the duration of the callback.
+async function withPlatform(platform: string, fn: () => Promise<void>): Promise<void> {
+  const original = process.platform;
+  Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+  try {
+    await fn();
+  } finally {
+    Object.defineProperty(process, 'platform', { value: original, configurable: true });
+  }
+}
+
+describe('copilot installer', () => {
+  // Pin the linux branch + XDG so the VS Code user dir is deterministic
+  // inside the temp home regardless of the host OS.
+  let originalXdg: string | undefined;
+  beforeEach(() => {
+    originalXdg = process.env.XDG_CONFIG_HOME;
+    process.env.XDG_CONFIG_HOME = join(home, '.config');
+  });
+  afterEach(() => {
+    if (originalXdg === undefined) delete process.env.XDG_CONFIG_HOME;
+    else process.env.XDG_CONFIG_HOME = originalXdg;
+  });
+
+  const hooksPath = () => join(home, '.copilot', 'hooks', 'cavemem.json');
+  const mcpPath = () => join(home, '.config', 'Code', 'User', 'mcp.json');
+
+  it('writes hooks to ~/.copilot/hooks/cavemem.json and MCP to VS Code user mcp.json', async () => {
+    await withPlatform('linux', async () => {
+      await copilot.install(ctx);
+    });
+    expect(existsSync(hooksPath())).toBe(true);
+    expect(existsSync(mcpPath())).toBe(true);
+
+    const hooks = JSON.parse(readFileSync(hooksPath(), 'utf8')) as {
+      hooks: Record<string, Array<{ type: string; command: string }>>;
+    };
+    expect(Object.keys(hooks.hooks).sort()).toEqual(
+      ['PostToolUse', 'SessionStart', 'Stop', 'UserPromptSubmit'].sort(),
+    );
+    expect(hooks.hooks.SessionStart?.[0]?.command).toBe(
+      `${ctx.nodeBin} ${ctx.cliPath} hook run session-start --ide copilot`,
+    );
+
+    const mcp = JSON.parse(readFileSync(mcpPath(), 'utf8')) as {
+      servers: Record<string, { type: string; command: string; args: string[] }>;
+    };
+    // VS Code's root key is `servers` (not `mcpServers`) and stdio entries
+    // carry an explicit type.
+    expect(mcp.servers.cavemem).toEqual({
+      type: 'stdio',
+      command: ctx.nodeBin,
+      args: [ctx.cliPath, 'mcp'],
+    });
+  });
+
+  it('is idempotent on re-install', async () => {
+    await withPlatform('linux', async () => {
+      await copilot.install(ctx);
+      await copilot.install(ctx);
+    });
+    const hooks = JSON.parse(readFileSync(hooksPath(), 'utf8')) as {
+      hooks: Record<string, Array<unknown>>;
+    };
+    for (const name of ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'Stop']) {
+      expect(hooks.hooks[name]?.length).toBe(1);
+    }
+    const mcp = JSON.parse(readFileSync(mcpPath(), 'utf8')) as {
+      servers: Record<string, unknown>;
+    };
+    expect(Object.keys(mcp.servers)).toEqual(['cavemem']);
+  });
+
+  it('preserves hand-added entries in its hooks file and unrelated MCP servers', async () => {
+    mkdirSync(join(home, '.copilot', 'hooks'), { recursive: true });
+    writeFileSync(
+      hooksPath(),
+      JSON.stringify({
+        hooks: {
+          SessionStart: [{ type: 'command', command: 'echo user-added' }],
+          PreCompact: [{ type: 'command', command: 'echo compact' }],
+        },
+      }),
+    );
+    mkdirSync(join(home, '.config', 'Code', 'User'), { recursive: true });
+    writeFileSync(
+      mcpPath(),
+      JSON.stringify({
+        servers: { other: { type: 'stdio', command: '/other/bin' } },
+        inputs: [{ id: 'token', type: 'promptString' }],
+      }),
+    );
+
+    await withPlatform('linux', async () => {
+      await copilot.install(ctx);
+    });
+
+    const hooks = JSON.parse(readFileSync(hooksPath(), 'utf8')) as {
+      hooks: Record<string, Array<{ command: string }>>;
+    };
+    expect(hooks.hooks.SessionStart?.length).toBe(2);
+    expect(hooks.hooks.SessionStart?.[0]?.command).toBe('echo user-added');
+    expect(hooks.hooks.PreCompact?.length).toBe(1);
+
+    const mcp = JSON.parse(readFileSync(mcpPath(), 'utf8')) as {
+      servers: Record<string, unknown>;
+      inputs: unknown[];
+    };
+    expect(mcp.servers.other).toEqual({ type: 'stdio', command: '/other/bin' });
+    expect(mcp.servers.cavemem).toBeDefined();
+    expect(mcp.inputs.length).toBe(1);
+  });
+
+  it('uninstall deletes its own hooks file when only cavemem entries exist', async () => {
+    await withPlatform('linux', async () => {
+      await copilot.install(ctx);
+      await copilot.uninstall(ctx);
+    });
+    expect(existsSync(hooksPath())).toBe(false);
+    const mcp = JSON.parse(readFileSync(mcpPath(), 'utf8')) as {
+      servers?: Record<string, unknown>;
+    };
+    expect(mcp.servers?.cavemem).toBeUndefined();
+  });
+
+  it('uninstall keeps the hooks file when user entries remain', async () => {
+    mkdirSync(join(home, '.copilot', 'hooks'), { recursive: true });
+    writeFileSync(
+      hooksPath(),
+      JSON.stringify({
+        hooks: { SessionStart: [{ type: 'command', command: 'echo user-added' }] },
+      }),
+    );
+    await withPlatform('linux', async () => {
+      await copilot.install(ctx);
+      await copilot.uninstall(ctx);
+    });
+    const hooks = JSON.parse(readFileSync(hooksPath(), 'utf8')) as {
+      hooks: Record<string, Array<{ command: string }>>;
+    };
+    expect(hooks.hooks.SessionStart?.length).toBe(1);
+    expect(hooks.hooks.SessionStart?.[0]?.command).toBe('echo user-added');
+    expect(hooks.hooks.PostToolUse).toBeUndefined();
+  });
+
+  it('routes mcp.json to Library/Application Support on darwin', async () => {
+    await withPlatform('darwin', async () => {
+      await copilot.install(ctx);
+    });
+    expect(
+      existsSync(join(home, 'Library', 'Application Support', 'Code', 'User', 'mcp.json')),
+    ).toBe(true);
+  });
+
+  it('routes mcp.json through APPDATA on win32', async () => {
+    const originalAppData = process.env.APPDATA;
+    process.env.APPDATA = join(home, 'Roaming');
+    try {
+      await withPlatform('win32', async () => {
+        await copilot.install(ctx);
+      });
+      expect(existsSync(join(home, 'Roaming', 'Code', 'User', 'mcp.json'))).toBe(true);
+    } finally {
+      if (originalAppData === undefined) delete process.env.APPDATA;
+      else process.env.APPDATA = originalAppData;
+    }
+  });
+
+  it('falls back to ideConfigDir/AppData/Roaming on win32 without APPDATA', async () => {
+    const originalAppData = process.env.APPDATA;
+    delete process.env.APPDATA;
+    try {
+      await withPlatform('win32', async () => {
+        await copilot.install(ctx);
+      });
+      expect(existsSync(join(home, 'AppData', 'Roaming', 'Code', 'User', 'mcp.json'))).toBe(true);
+    } finally {
+      if (originalAppData !== undefined) process.env.APPDATA = originalAppData;
+    }
+  });
+
+  it('detect returns true only when ~/.copilot exists', async () => {
+    expect(await copilot.detect(ctx)).toBe(false);
+    mkdirSync(join(home, '.copilot'));
+    expect(await copilot.detect(ctx)).toBe(true);
   });
 });
