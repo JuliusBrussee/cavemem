@@ -62,10 +62,10 @@ export const SettingsSchema = z
         idleShutdownMs: z
           .number()
           .int()
-          .positive()
           .default(600_000)
+          .transform((v) => Math.max(0, v))
           .describe(
-            'Milliseconds the worker stays idle (no embed work, no viewer traffic) before self-exiting.',
+            'Milliseconds the worker stays idle (no embed work, no viewer traffic) before self-exiting. 0 disables idle shutdown.',
           ),
       })
       .default({

@@ -16,4 +16,18 @@ describe('SettingsSchema', () => {
     expect(defaultSettings.workerPort).toBe(37777);
     expect(defaultSettings.embedding.provider).toBe('local');
   });
+
+  it('idleShutdownMs defaults to 600000', () => {
+    expect(defaultSettings.embedding.idleShutdownMs).toBe(600_000);
+  });
+
+  it('idleShutdownMs: 0 disables idle shutdown and is preserved as 0', () => {
+    const parsed = SettingsSchema.parse({ embedding: { idleShutdownMs: 0 } });
+    expect(parsed.embedding.idleShutdownMs).toBe(0);
+  });
+
+  it('clamps a negative idleShutdownMs to 0', () => {
+    const parsed = SettingsSchema.parse({ embedding: { idleShutdownMs: -5000 } });
+    expect(parsed.embedding.idleShutdownMs).toBe(0);
+  });
 });

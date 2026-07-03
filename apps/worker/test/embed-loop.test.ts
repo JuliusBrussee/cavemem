@@ -116,4 +116,64 @@ describe('embed loop', () => {
     // exhaust the "does the file path look right?" check regardless of state.
     expect(existsSync(dir)).toBe(true);
   });
+
+  it('idleShutdownMs: 0 disables idle shutdown — never fires onIdleExit', async () => {
+    const settings = SettingsSchema.parse({
+      dataDir: dir,
+      embedding: {
+        provider: 'local',
+        model: 'mock-model',
+        batchSize: 8,
+        autoStart: false,
+        idleShutdownMs: 0,
+      },
+    });
+    let exited = false;
+    const handle = startEmbedLoop({
+      store,
+      embedder: mockEmbedder('mock-model', 4),
+      settings,
+      idleTickMs: 20,
+      onIdleExit: () => {
+        exited = true;
+      },
+    });
+
+    // Idle immediately (no observations to embed) — wait well past what
+    // would have been a shutdown window if idleShutdownMs behaved as > 0.
+    await new Promise((r) => setTimeout(r, 200));
+    await handle.stop();
+
+    expect(exited).toBe(false);
+  });
+
+  it('clamps a negative idleShutdownMs to 0 (disabled)', async () => {
+    const settings = SettingsSchema.parse({
+      dataDir: dir,
+      embedding: {
+        provider: 'local',
+        model: 'mock-model',
+        batchSize: 8,
+        autoStart: false,
+        idleShutdownMs: -1,
+      },
+    });
+    expect(settings.embedding.idleShutdownMs).toBe(0);
+
+    let exited = false;
+    const handle = startEmbedLoop({
+      store,
+      embedder: mockEmbedder('mock-model', 4),
+      settings,
+      idleTickMs: 20,
+      onIdleExit: () => {
+        exited = true;
+      },
+    });
+
+    await new Promise((r) => setTimeout(r, 200));
+    await handle.stop();
+
+    expect(exited).toBe(false);
+  });
 });
