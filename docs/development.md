@@ -21,6 +21,10 @@ cavemem --help
 
 ## Run against a scratch data dir
 
+`CAVEMEM_HOME` overrides where cavemem stores settings.json, data.db, and all
+other state (see `@cavemem/config`'s `resolveCavememHome`) — point it at a
+repo-local scratch dir so dev runs never touch `~/.cavemem`:
+
 ```bash
 export CAVEMEM_HOME=$PWD/.cavemem-dev
 pnpm dev

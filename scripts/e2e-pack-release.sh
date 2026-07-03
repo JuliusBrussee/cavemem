@@ -46,7 +46,11 @@ npm install --prefix "$PREFIX" --global "$TGZ" >/dev/null
 BIN="$PREFIX/bin/cavemem"
 test -x "$BIN" || { echo "bin shim missing"; exit 1; }
 
+# Isolate $HOME and unset the env vars cavemem's home-dir resolution (issue
+# #47) checks before it, so a real CAVEMEM_HOME / XDG_DATA_HOME in the
+# caller's shell can't redirect this test outside the sandbox.
 export HOME="$HOME_DIR"
+unset CAVEMEM_HOME XDG_DATA_HOME
 
 echo "==> 4. version"
 "$BIN" --version

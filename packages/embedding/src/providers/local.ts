@@ -31,7 +31,7 @@ export async function createLocalEmbedder(
   const muslProbe = detectMusl();
   if (muslProbe.isMusl) {
     throw new Error(
-      `Local embedding provider is not supported on musl libc (${muslProbe.reason ?? 'unknown'}). Set embedding.provider to 'none' or 'ollama' in ~/.cavemem/settings.json.`,
+      `Local embedding provider is not supported on musl libc (${muslProbe.reason ?? 'unknown'}). Set embedding.provider to 'none' or 'ollama' in settings.json (run \`cavemem doctor\` to find its path).`,
     );
   }
 
