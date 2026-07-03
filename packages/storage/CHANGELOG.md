@@ -1,5 +1,112 @@
 # @cavemem/storage
 
+## 0.3.0
+
+### Minor Changes
+
+- 8367404: Add bun:sqlite backend so cavemem runs natively under Bun without the better-sqlite3 native addon.
+
+  When the process is Bun, `openDb` loads `bun:sqlite` via `createRequire` at runtime and
+  wraps it in the same `DbHandle` interface used by the better-sqlite3 path. The adapter
+  normalises the two API differences: `get()` returning `null` vs `undefined` on no-match,
+  and the absence of `{ readonly: false }` support on bun:sqlite. All SQL — FTS5, bm25,
+  snippet, binary blob storage — is identical across both backends. No package.json change
+  is needed; `bun:sqlite` is a Bun built-in. Node users are unaffected.
+
+- 2db720f: feat(cli,storage): add `cavemem import` to round-trip `cavemem export` output (#33)
+
+  `cavemem export` had no matching `import`, so cross-device transfer (export
+  JSONL on machine A, load it on machine B) was a manual JSON-massaging
+  exercise. `cavemem import <file.jsonl> [--dry-run]` now round-trips exactly
+  what export emits — `session` and `observation` records; export does not
+  emit summaries, so import doesn't need to either.
+
+  Sessions merge by id: a session whose id already exists in the target
+  database is skipped and counted. Observation ids are per-machine
+  AUTOINCREMENT values with no cross-device coordination — machine A's id=42
+  and machine B's id=42 are routinely different observations — so the new
+  `Storage.importObservation` treats the exported id as a preference, not an
+  identity: an exact (session_id, ts, content) duplicate anywhere in the
+  table is skipped; a free id is used as-is; an id occupied by a _different_
+  observation gets a fresh AUTOINCREMENT id and is counted as "reassigned".
+  Nothing is ever overwritten, and re-running the same import is a no-op even
+  after a previous run reassigned ids. The summary line reports
+  imported/skipped/reassigned counts. Sessions referenced by observations are
+  imported first (or a minimal session row is synthesized as a defensive
+  fallback), so the `observations.session_id` foreign key never rejects a
+  valid row.
+
+  The whole file is validated up front — a malformed line aborts with a
+  clear, line-numbered error and writes nothing — and the actual writes run
+  inside one SQLite transaction (new `Storage.transaction`, implemented in
+  the DbHandle plumbing for both the better-sqlite3 and bun:sqlite backends),
+  so a failure partway through also leaves the database untouched.
+  `--dry-run` runs the identical write path and rolls back at the end; when
+  the target database doesn't exist yet it runs against an in-memory
+  database instead, so not even an empty `data.db` is left behind.
+
+  Exported `content` already passed through `@cavemem/compress` on the
+  source machine, so import writes it back verbatim (no re-compression)
+  rather than through `MemoryStore.addObservation` — recompressing on the
+  target could change the bytes if its `compression.intensity` setting
+  differs from the source's, which would break byte-identical
+  export → import → export round-trips. `Storage.createSession` now returns
+  whether the row was inserted or already existed, which import uses for its
+  skip counts.
+
+  Imported observations get no `embeddings` row, so they're picked up by the
+  worker's embedding backfill loop the same way any newly-added observation
+  is; the FTS5 index is kept in sync via the same insert trigger every other
+  write path uses. Embedding vectors themselves are never transported.
+
+  Also fixes two latent `cavemem export` bugs found while wiring this up:
+  the `Storage` constructor ran schema-init SQL (including a real
+  `INSERT OR IGNORE`) even when opened `{ readonly: true }`, which SQLite
+  rejects outright on a true read-only connection — export threw for every
+  user once the database existed. Readonly mode now skips schema-init, since
+  it's only ever used against a database an earlier writable `Storage` has
+  already initialized. And exporting with no database at all now exits
+  non-zero with a short message instead of an unhandled SQLITE_CANTOPEN.
+
+  README documents the new command and the manual cross-device transfer
+  flow (export on A, stop the worker, import on B, restart).
+
+### Patch Changes
+
+- a52553d: fix(storage,cli): bump better-sqlite3 to ^12.0.0 for Node 26 (#37)
+
+  Node 26 removed three V8 C++ APIs (`v8::Object::GetPrototype`,
+  `v8::Context::GetIsolate`, `v8::PropertyCallbackInfo<T>::This`) that
+  better-sqlite3 ≤11.x relied on, so `npm install -g cavemem` fails with
+  `error C2039: 'GetPrototype': is not a member of 'v8::Object'` when there
+  is no prebuilt binary for the target Node ABI. better-sqlite3 v12 rewrites
+  those call sites and ships prebuilts for Node 20 through 26. The Storage
+  API surface used by this repo (`prepare`, `run`, `get`, `all`, `exec`,
+  FTS5, `bm25`, `snippet`, blob storage) is identical across v11 → v12, so
+  no code changes are needed.
+
+- 711f5b6: fix(hooks,storage): scope session-start prior-session context to current cwd (#39)
+
+  The `session-start` hook surfaced "Prior-session context" pulled from the
+  most recent N sessions across **all** projects on the machine. Opening
+  Claude Code in project A could inject summaries from last night's project B
+  session into the new kickoff, even though every session row already stores
+  `cwd`. Now `session-start.ts` widens the initial lookup from 4 → 20 and
+  filters by exact-`cwd` match before picking the top 3, falling back to the
+  old global behaviour only when the payload contains no `cwd` (so non-Claude
+  Code IDEs are unaffected).
+
+  `Storage.searchFts(query, limit, cwd?)` also gained an optional `cwd`
+  parameter that joins `sessions` and restricts hits to that project; default
+  behaviour without `cwd` is unchanged.
+
+- Updated dependencies [dec94ef]
+- Updated dependencies [51e3608]
+- Updated dependencies [b5976a5]
+- Updated dependencies [6dc2ae5]
+- Updated dependencies [f2e2f49]
+  - @cavemem/config@0.3.0
+
 ## 0.2.0
 
 ### Minor Changes
