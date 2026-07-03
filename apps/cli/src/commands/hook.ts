@@ -34,7 +34,7 @@ export function registerHookCommand(program: Command): void {
       }
       const hookName = name as HookName;
       const raw = await readStdin();
-      const parsed = raw.trim() ? safeJson(raw) : {};
+      const parsed = normalizeForIde(opts.ide, raw.trim() ? safeJson(raw) : {});
       const input = {
         session_id: typeof parsed.session_id === 'string' ? parsed.session_id : 'unknown',
         ...parsed,
@@ -72,6 +72,38 @@ function writeIdeOutput(hook: HookName, result: HookResult): void {
     },
   };
   process.stdout.write(`${JSON.stringify(payload)}\n`);
+}
+
+// Augment's hook payloads use different field names than Claude Code's
+// (conversation_id, workspace_roots, and assistant text nested under
+// `conversation` — present only when the installer sets
+// metadata.includeConversationData on the Stop hook). Translate them here so
+// packages/hooks stays IDE-agnostic. Exported for tests.
+export function normalizeForIde(
+  ide: string | undefined,
+  parsed: Record<string, unknown>,
+): Record<string, unknown> {
+  if (ide !== 'augment') return parsed;
+  const out = { ...parsed };
+  if (typeof out.session_id !== 'string' && typeof out.conversation_id === 'string') {
+    out.session_id = out.conversation_id;
+  }
+  if (
+    out.cwd === undefined &&
+    Array.isArray(out.workspace_roots) &&
+    typeof out.workspace_roots[0] === 'string'
+  ) {
+    out.cwd = out.workspace_roots[0];
+  }
+  const conversation = out.conversation as Record<string, unknown> | undefined;
+  if (
+    out.turn_summary === undefined &&
+    conversation &&
+    typeof conversation.agentTextResponse === 'string'
+  ) {
+    out.turn_summary = conversation.agentTextResponse;
+  }
+  return out;
 }
 
 function safeJson(s: string): Record<string, unknown> {

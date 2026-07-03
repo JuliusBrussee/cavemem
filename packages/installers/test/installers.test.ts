@@ -5,14 +5,19 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse as parseToml } from 'smol-toml';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { antigravity } from '../src/antigravity.js';
+import { augment } from '../src/augment.js';
+import { bob } from '../src/bob.js';
 import { claudeCode } from '../src/claude-code.js';
 import { codex } from '../src/codex.js';
+import { copilot } from '../src/copilot.js';
 import { cursor } from '../src/cursor.js';
 import { deepMerge } from '../src/fs-utils.js';
 import { openCode } from '../src/opencode.js';
@@ -60,7 +65,17 @@ afterEach(() => {
 describe('registry', () => {
   it('exposes all expected installers', () => {
     expect(Object.keys(installers).sort()).toEqual(
-      ['claude-code', 'codex', 'cursor', 'gemini-cli', 'opencode'].sort(),
+      [
+        'claude-code',
+        'codex',
+        'cursor',
+        'gemini-cli',
+        'opencode',
+        'copilot',
+        'augment',
+        'antigravity',
+        'bob',
+      ].sort(),
     );
   });
   it('getInstaller throws on unknown id', () => {
@@ -614,5 +629,449 @@ describe('checkWindowsSh (#56)', () => {
 
   it('resolveShDefault returns a boolean without throwing', () => {
     expect(typeof resolveShDefault()).toBe('boolean');
+  });
+});
+
+// vscodeUserDir/wrapper emission branch on process.platform, which vitest
+// cannot set via env — swap the property for the duration of the callback.
+async function withPlatform(platform: string, fn: () => Promise<void>): Promise<void> {
+  const original = process.platform;
+  Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+  try {
+    await fn();
+  } finally {
+    Object.defineProperty(process, 'platform', { value: original, configurable: true });
+  }
+}
+
+describe('copilot installer', () => {
+  // Pin the linux branch + XDG so the VS Code user dir is deterministic
+  // inside the temp home regardless of the host OS.
+  let originalXdg: string | undefined;
+  beforeEach(() => {
+    originalXdg = process.env.XDG_CONFIG_HOME;
+    process.env.XDG_CONFIG_HOME = join(home, '.config');
+  });
+  afterEach(() => {
+    if (originalXdg === undefined) delete process.env.XDG_CONFIG_HOME;
+    else process.env.XDG_CONFIG_HOME = originalXdg;
+  });
+
+  const hooksPath = () => join(home, '.copilot', 'hooks', 'cavemem.json');
+  const mcpPath = () => join(home, '.config', 'Code', 'User', 'mcp.json');
+
+  it('writes hooks to ~/.copilot/hooks/cavemem.json and MCP to VS Code user mcp.json', async () => {
+    await withPlatform('linux', async () => {
+      await copilot.install(ctx);
+    });
+    expect(existsSync(hooksPath())).toBe(true);
+    expect(existsSync(mcpPath())).toBe(true);
+
+    const hooks = JSON.parse(readFileSync(hooksPath(), 'utf8')) as {
+      hooks: Record<string, Array<{ type: string; command: string }>>;
+    };
+    expect(Object.keys(hooks.hooks).sort()).toEqual(
+      ['PostToolUse', 'SessionStart', 'Stop', 'UserPromptSubmit'].sort(),
+    );
+    expect(hooks.hooks.SessionStart?.[0]?.command).toBe(
+      `${ctx.nodeBin} ${ctx.cliPath} hook run session-start --ide copilot`,
+    );
+
+    const mcp = JSON.parse(readFileSync(mcpPath(), 'utf8')) as {
+      servers: Record<string, { type: string; command: string; args: string[] }>;
+    };
+    // VS Code's root key is `servers` (not `mcpServers`) and stdio entries
+    // carry an explicit type.
+    expect(mcp.servers.cavemem).toEqual({
+      type: 'stdio',
+      command: ctx.nodeBin,
+      args: [ctx.cliPath, 'mcp'],
+    });
+  });
+
+  it('is idempotent on re-install', async () => {
+    await withPlatform('linux', async () => {
+      await copilot.install(ctx);
+      await copilot.install(ctx);
+    });
+    const hooks = JSON.parse(readFileSync(hooksPath(), 'utf8')) as {
+      hooks: Record<string, Array<unknown>>;
+    };
+    for (const name of ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'Stop']) {
+      expect(hooks.hooks[name]?.length).toBe(1);
+    }
+    const mcp = JSON.parse(readFileSync(mcpPath(), 'utf8')) as {
+      servers: Record<string, unknown>;
+    };
+    expect(Object.keys(mcp.servers)).toEqual(['cavemem']);
+  });
+
+  it('preserves hand-added entries in its hooks file and unrelated MCP servers', async () => {
+    mkdirSync(join(home, '.copilot', 'hooks'), { recursive: true });
+    writeFileSync(
+      hooksPath(),
+      JSON.stringify({
+        hooks: {
+          SessionStart: [{ type: 'command', command: 'echo user-added' }],
+          PreCompact: [{ type: 'command', command: 'echo compact' }],
+        },
+      }),
+    );
+    mkdirSync(join(home, '.config', 'Code', 'User'), { recursive: true });
+    writeFileSync(
+      mcpPath(),
+      JSON.stringify({
+        servers: { other: { type: 'stdio', command: '/other/bin' } },
+        inputs: [{ id: 'token', type: 'promptString' }],
+      }),
+    );
+
+    await withPlatform('linux', async () => {
+      await copilot.install(ctx);
+    });
+
+    const hooks = JSON.parse(readFileSync(hooksPath(), 'utf8')) as {
+      hooks: Record<string, Array<{ command: string }>>;
+    };
+    expect(hooks.hooks.SessionStart?.length).toBe(2);
+    expect(hooks.hooks.SessionStart?.[0]?.command).toBe('echo user-added');
+    expect(hooks.hooks.PreCompact?.length).toBe(1);
+
+    const mcp = JSON.parse(readFileSync(mcpPath(), 'utf8')) as {
+      servers: Record<string, unknown>;
+      inputs: unknown[];
+    };
+    expect(mcp.servers.other).toEqual({ type: 'stdio', command: '/other/bin' });
+    expect(mcp.servers.cavemem).toBeDefined();
+    expect(mcp.inputs.length).toBe(1);
+  });
+
+  it('uninstall deletes its own hooks file when only cavemem entries exist', async () => {
+    await withPlatform('linux', async () => {
+      await copilot.install(ctx);
+      await copilot.uninstall(ctx);
+    });
+    expect(existsSync(hooksPath())).toBe(false);
+    const mcp = JSON.parse(readFileSync(mcpPath(), 'utf8')) as {
+      servers?: Record<string, unknown>;
+    };
+    expect(mcp.servers?.cavemem).toBeUndefined();
+  });
+
+  it('uninstall keeps the hooks file when user entries remain', async () => {
+    mkdirSync(join(home, '.copilot', 'hooks'), { recursive: true });
+    writeFileSync(
+      hooksPath(),
+      JSON.stringify({
+        hooks: { SessionStart: [{ type: 'command', command: 'echo user-added' }] },
+      }),
+    );
+    await withPlatform('linux', async () => {
+      await copilot.install(ctx);
+      await copilot.uninstall(ctx);
+    });
+    const hooks = JSON.parse(readFileSync(hooksPath(), 'utf8')) as {
+      hooks: Record<string, Array<{ command: string }>>;
+    };
+    expect(hooks.hooks.SessionStart?.length).toBe(1);
+    expect(hooks.hooks.SessionStart?.[0]?.command).toBe('echo user-added');
+    expect(hooks.hooks.PostToolUse).toBeUndefined();
+  });
+
+  it('routes mcp.json to Library/Application Support on darwin', async () => {
+    await withPlatform('darwin', async () => {
+      await copilot.install(ctx);
+    });
+    expect(
+      existsSync(join(home, 'Library', 'Application Support', 'Code', 'User', 'mcp.json')),
+    ).toBe(true);
+  });
+
+  it('routes mcp.json through APPDATA on win32', async () => {
+    const originalAppData = process.env.APPDATA;
+    process.env.APPDATA = join(home, 'Roaming');
+    try {
+      await withPlatform('win32', async () => {
+        await copilot.install(ctx);
+      });
+      expect(existsSync(join(home, 'Roaming', 'Code', 'User', 'mcp.json'))).toBe(true);
+    } finally {
+      if (originalAppData === undefined) delete process.env.APPDATA;
+      else process.env.APPDATA = originalAppData;
+    }
+  });
+
+  it('falls back to ideConfigDir/AppData/Roaming on win32 without APPDATA', async () => {
+    const originalAppData = process.env.APPDATA;
+    delete process.env.APPDATA;
+    try {
+      await withPlatform('win32', async () => {
+        await copilot.install(ctx);
+      });
+      expect(existsSync(join(home, 'AppData', 'Roaming', 'Code', 'User', 'mcp.json'))).toBe(true);
+    } finally {
+      if (originalAppData !== undefined) process.env.APPDATA = originalAppData;
+    }
+  });
+
+  it('quotes paths with spaces in hook command strings (Windows)', async () => {
+    const winCtx: InstallContext = {
+      ideConfigDir: home,
+      cliPath: 'C:\\Users\\Some User\\AppData\\Roaming\\npm\\node_modules\\cavemem\\dist\\index.js',
+      nodeBin: 'C:\\Program Files\\nodejs\\node.exe',
+      dataDir: join(home, '.cavemem'),
+    };
+    // Pin the linux mcp.json branch — only the hook command quoting is under
+    // test; the path strings are opaque to join().
+    await withPlatform('linux', async () => {
+      await copilot.install(winCtx);
+    });
+    const hooks = JSON.parse(readFileSync(hooksPath(), 'utf8')) as {
+      hooks: Record<string, Array<{ command: string }>>;
+    };
+    expect(hooks.hooks.SessionStart?.[0]?.command).toBe(
+      `"${winCtx.nodeBin}" "${winCtx.cliPath}" hook run session-start --ide copilot`,
+    );
+  });
+
+  it('detect returns true only when ~/.copilot exists', async () => {
+    expect(await copilot.detect(ctx)).toBe(false);
+    mkdirSync(join(home, '.copilot'));
+    expect(await copilot.detect(ctx)).toBe(true);
+  });
+});
+
+describe('augment installer', () => {
+  const settingsPath = () => join(home, '.augment', 'settings.json');
+  const wrapperDir = () => join(home, '.augment', 'cavemem-hooks');
+
+  it('writes executable wrapper scripts and settings.json with hooks + mcpServers', async () => {
+    await withPlatform('linux', async () => {
+      await augment.install(ctx);
+    });
+
+    for (const hookId of ['session-start', 'post-tool-use', 'stop', 'session-end']) {
+      const wrapper = join(wrapperDir(), `${hookId}.sh`);
+      expect(existsSync(wrapper)).toBe(true);
+      expect(statSync(wrapper).mode & 0o111).toBeTruthy();
+      const body = readFileSync(wrapper, 'utf8');
+      expect(body).toContain(`hook run ${hookId} --ide augment`);
+      expect(body.startsWith('#!/bin/sh\n')).toBe(true);
+    }
+
+    const settings = JSON.parse(readFileSync(settingsPath(), 'utf8')) as {
+      hooks: Record<
+        string,
+        Array<{ matcher?: string; hooks: Array<{ command: string; metadata?: unknown }> }>
+      >;
+      mcpServers: Record<string, { command: string; args: string[] }>;
+    };
+    // Augment has no UserPromptSubmit event.
+    expect(Object.keys(settings.hooks).sort()).toEqual(
+      ['PostToolUse', 'SessionEnd', 'SessionStart', 'Stop'].sort(),
+    );
+    // Hook commands must be script-file paths, not inline command strings.
+    expect(settings.hooks.SessionStart?.[0]?.hooks?.[0]?.command).toBe(
+      join(wrapperDir(), 'session-start.sh'),
+    );
+    // Tool events require a matcher; session events must not carry one.
+    expect(settings.hooks.PostToolUse?.[0]?.matcher).toBe('.*');
+    expect(settings.hooks.SessionStart?.[0]?.matcher).toBeUndefined();
+    expect(settings.mcpServers.cavemem).toEqual({
+      command: ctx.nodeBin,
+      args: [ctx.cliPath, 'mcp'],
+    });
+  });
+
+  it('sets includeConversationData on the Stop hook only', async () => {
+    await withPlatform('linux', async () => {
+      await augment.install(ctx);
+    });
+    const settings = JSON.parse(readFileSync(settingsPath(), 'utf8')) as {
+      hooks: Record<string, Array<{ hooks: Array<{ metadata?: Record<string, unknown> }> }>>;
+    };
+    // Without this flag Augment's Stop payload has no assistant text at all,
+    // so turn-summary capture would silently store nothing.
+    expect(settings.hooks.Stop?.[0]?.hooks?.[0]?.metadata).toEqual({
+      includeConversationData: true,
+    });
+    expect(settings.hooks.SessionStart?.[0]?.hooks?.[0]?.metadata).toBeUndefined();
+    expect(settings.hooks.PostToolUse?.[0]?.hooks?.[0]?.metadata).toBeUndefined();
+  });
+
+  it('emits .cmd wrappers on win32', async () => {
+    await withPlatform('win32', async () => {
+      await augment.install(ctx);
+    });
+    const wrapper = join(wrapperDir(), 'session-start.cmd');
+    expect(existsSync(wrapper)).toBe(true);
+    const body = readFileSync(wrapper, 'utf8');
+    expect(body.startsWith('@echo off\r\n')).toBe(true);
+    expect(body).toContain('hook run session-start --ide augment');
+    const settings = JSON.parse(readFileSync(settingsPath(), 'utf8')) as {
+      hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+    };
+    expect(settings.hooks.SessionStart?.[0]?.hooks?.[0]?.command).toBe(wrapper);
+  });
+
+  it('is idempotent on re-install', async () => {
+    await withPlatform('linux', async () => {
+      await augment.install(ctx);
+      await augment.install(ctx);
+    });
+    const settings = JSON.parse(readFileSync(settingsPath(), 'utf8')) as {
+      hooks: Record<string, Array<unknown>>;
+      mcpServers: Record<string, unknown>;
+    };
+    for (const name of ['SessionStart', 'PostToolUse', 'Stop', 'SessionEnd']) {
+      expect(settings.hooks[name]?.length).toBe(1);
+    }
+    expect(Object.keys(settings.mcpServers)).toEqual(['cavemem']);
+  });
+
+  it('preserves unrelated settings on install and uninstall; removes wrapper dir', async () => {
+    mkdirSync(join(home, '.augment'), { recursive: true });
+    writeFileSync(
+      settingsPath(),
+      JSON.stringify({
+        theme: 'dark',
+        hooks: {
+          SessionStart: [{ hooks: [{ type: 'command', command: '/user/own.sh' }] }],
+          PreToolUse: [{ matcher: '.*', hooks: [{ type: 'command', command: '/user/pre.sh' }] }],
+        },
+        mcpServers: { other: { command: '/other/bin' } },
+      }),
+    );
+
+    await withPlatform('linux', async () => {
+      await augment.install(ctx);
+    });
+    const installed = JSON.parse(readFileSync(settingsPath(), 'utf8')) as {
+      theme: string;
+      hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+      mcpServers: Record<string, unknown>;
+    };
+    expect(installed.theme).toBe('dark');
+    expect(installed.hooks.SessionStart?.length).toBe(2);
+    expect(installed.hooks.SessionStart?.[0]?.hooks?.[0]?.command).toBe('/user/own.sh');
+    expect(installed.hooks.PreToolUse?.length).toBe(1);
+    expect(installed.mcpServers.other).toEqual({ command: '/other/bin' });
+
+    await withPlatform('linux', async () => {
+      await augment.uninstall(ctx);
+    });
+    const after = JSON.parse(readFileSync(settingsPath(), 'utf8')) as typeof installed;
+    expect(after.theme).toBe('dark');
+    expect(after.hooks.SessionStart?.length).toBe(1);
+    expect(after.hooks.SessionStart?.[0]?.hooks?.[0]?.command).toBe('/user/own.sh');
+    expect(after.hooks.PreToolUse?.length).toBe(1);
+    expect(after.hooks.Stop).toBeUndefined();
+    expect(after.mcpServers.other).toBeDefined();
+    expect((after.mcpServers as Record<string, unknown>).cavemem).toBeUndefined();
+    expect(existsSync(wrapperDir())).toBe(false);
+  });
+
+  it('detect returns true only when ~/.augment exists', async () => {
+    expect(await augment.detect(ctx)).toBe(false);
+    mkdirSync(join(home, '.augment'));
+    expect(await augment.detect(ctx)).toBe(true);
+  });
+});
+
+describe('antigravity installer (query-only)', () => {
+  const cfgPath = () => join(home, '.gemini', 'config', 'mcp_config.json');
+
+  it('writes MCP config and warns that capture is unavailable', async () => {
+    const messages = await antigravity.install(ctx);
+    const cfg = JSON.parse(readFileSync(cfgPath(), 'utf8')) as {
+      mcpServers: Record<string, { command: string; args?: string[] }>;
+    };
+    expect(cfg.mcpServers.cavemem).toEqual({
+      command: ctx.nodeBin,
+      args: [ctx.cliPath, 'mcp'],
+    });
+    expect(messages.some((m) => m.includes('query-only'))).toBe(true);
+  });
+
+  it('preserves other servers and uninstalls cleanly', async () => {
+    mkdirSync(join(home, '.gemini', 'config'), { recursive: true });
+    writeFileSync(cfgPath(), JSON.stringify({ mcpServers: { other: { command: '/x' } } }));
+    await antigravity.install(ctx);
+    await antigravity.uninstall(ctx);
+    const cfg = JSON.parse(readFileSync(cfgPath(), 'utf8')) as {
+      mcpServers: Record<string, unknown>;
+    };
+    expect(cfg.mcpServers.other).toEqual({ command: '/x' });
+    expect(cfg.mcpServers.cavemem).toBeUndefined();
+  });
+
+  it('uninstall without a config file writes nothing', async () => {
+    const messages = await antigravity.uninstall(ctx);
+    expect(messages).toEqual([]);
+    expect(existsSync(cfgPath())).toBe(false);
+  });
+
+  it('uninstall drops the mcpServers key when it becomes empty', async () => {
+    await antigravity.install(ctx);
+    await antigravity.uninstall(ctx);
+    const cfg = JSON.parse(readFileSync(cfgPath(), 'utf8')) as {
+      mcpServers?: Record<string, unknown>;
+    };
+    expect(cfg.mcpServers).toBeUndefined();
+  });
+
+  it('detect returns true only when ~/.gemini/config exists', async () => {
+    expect(await antigravity.detect(ctx)).toBe(false);
+    mkdirSync(join(home, '.gemini', 'config'), { recursive: true });
+    expect(await antigravity.detect(ctx)).toBe(true);
+  });
+});
+
+describe('bob installer (query-only)', () => {
+  const cfgPath = () => join(home, '.bob', 'mcp.json');
+
+  it('writes MCP config and warns that capture is unavailable', async () => {
+    const messages = await bob.install(ctx);
+    const cfg = JSON.parse(readFileSync(cfgPath(), 'utf8')) as {
+      mcpServers: Record<string, { command: string; args?: string[] }>;
+    };
+    expect(cfg.mcpServers.cavemem).toEqual({
+      command: ctx.nodeBin,
+      args: [ctx.cliPath, 'mcp'],
+    });
+    expect(messages.some((m) => m.includes('query-only'))).toBe(true);
+  });
+
+  it('preserves other servers and uninstalls cleanly', async () => {
+    mkdirSync(join(home, '.bob'), { recursive: true });
+    writeFileSync(cfgPath(), JSON.stringify({ mcpServers: { other: { command: '/x' } } }));
+    await bob.install(ctx);
+    await bob.uninstall(ctx);
+    const cfg = JSON.parse(readFileSync(cfgPath(), 'utf8')) as {
+      mcpServers: Record<string, unknown>;
+    };
+    expect(cfg.mcpServers.other).toEqual({ command: '/x' });
+    expect(cfg.mcpServers.cavemem).toBeUndefined();
+  });
+
+  it('uninstall without a config file writes nothing', async () => {
+    const messages = await bob.uninstall(ctx);
+    expect(messages).toEqual([]);
+    expect(existsSync(cfgPath())).toBe(false);
+  });
+
+  it('uninstall drops the mcpServers key when it becomes empty', async () => {
+    await bob.install(ctx);
+    await bob.uninstall(ctx);
+    const cfg = JSON.parse(readFileSync(cfgPath(), 'utf8')) as {
+      mcpServers?: Record<string, unknown>;
+    };
+    expect(cfg.mcpServers).toBeUndefined();
+  });
+
+  it('detect returns true only when ~/.bob exists', async () => {
+    expect(await bob.detect(ctx)).toBe(false);
+    mkdirSync(join(home, '.bob'));
+    expect(await bob.detect(ctx)).toBe(true);
   });
 });

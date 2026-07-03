@@ -25,7 +25,7 @@
 
 Cross-agent persistent memory for coding assistants. Hooks fire at session boundaries, compress observations with the caveman grammar (~75% fewer prose tokens, code and paths preserved byte-for-byte), and write to local SQLite. Agents query their own history through three MCP tools. No network. No cloud.
 
-**Supports:** Claude Code · Cursor · Gemini CLI · OpenCode · Codex
+**Supports:** Claude Code · Cursor · Gemini CLI · OpenCode · Codex · GitHub Copilot · Augment Code · Antigravity (query-only) · IBM Bob (query-only)
 
 - **Persistent memory across sessions.** Hooks capture what happened; the store keeps it.
 - **Compressed at rest.** Deterministic caveman grammar, round-trip-guaranteed expansion for humans.
@@ -33,7 +33,7 @@ Cross-agent persistent memory for coding assistants. Hooks fire at session bound
 - **Hybrid search.** SQLite FTS5 keyword + local vector index, combined with a tunable ranker.
 - **Local by default.** No network calls. Optional remote embedding providers via config.
 - **Web viewer.** Read-only UI at `http://localhost:37777` for browsing sessions in human-readable form. Token-protected: the worker generates a local bearer token on first start and injects it into the served page, so `cavemem viewer` still opens with zero friction while `/api/*` rejects requests without it.
-- **Cross-IDE installers.** Claude Code, Gemini CLI, OpenCode, Codex, Cursor — one command each.
+- **Cross-IDE installers.** Claude Code, Gemini CLI, OpenCode, Codex, Cursor, GitHub Copilot, Augment Code, Antigravity (query-only), IBM Bob (query-only) — one command each.
 - **Privacy-aware.** `<private>...</private>` stripped at write boundary. Path globs exclude whole directories.
 
 ---
@@ -43,7 +43,7 @@ Cross-agent persistent memory for coding assistants. Hooks fire at session bound
 ```sh
 npm install -g cavemem
 cavemem install                    # Claude Code
-cavemem install --ide cursor       # cursor | gemini-cli | opencode | codex
+cavemem install --ide cursor       # cursor | gemini-cli | opencode | codex | copilot | augment | antigravity | bob
 cavemem status                     # see wiring + embedding backfill
 cavemem viewer                     # open http://127.0.0.1:37777
 ```
