@@ -1,5 +1,25 @@
 # @cavemem/worker
 
+## 0.3.0
+
+### Patch Changes
+
+- Updated dependencies [8367404]
+- Updated dependencies [dec94ef]
+- Updated dependencies [2db720f]
+- Updated dependencies [51e3608]
+- Updated dependencies [a52553d]
+- Updated dependencies [b5976a5]
+- Updated dependencies [711f5b6]
+- Updated dependencies [6dc2ae5]
+- Updated dependencies [f2e2f49]
+- Updated dependencies [061473a]
+  - @cavemem/storage@0.3.0
+  - @cavemem/compress@0.3.0
+  - @cavemem/config@0.3.0
+  - @cavemem/embedding@0.3.0
+  - @cavemem/core@0.3.0
+
 ## 0.2.0
 
 ### Minor Changes

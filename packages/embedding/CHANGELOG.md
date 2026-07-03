@@ -1,5 +1,103 @@
 # @cavemem/embedding
 
+## 0.3.0
+
+### Patch Changes
+
+- 51e3608: feat(config): resolve cavemem home dir via CAVEMEM_HOME / XDG (#47)
+
+  cavemem was hardcoded to `~/.cavemem` for settings.json, data.db, the worker
+  pidfile/state, and the model cache. Issue #47 asked for a way to stop
+  polluting `$HOME` and/or relocate the data dir. `@cavemem/config` now
+  resolves the cavemem home directory in this order:
+
+  1. `CAVEMEM_HOME` env var, if set.
+  2. An existing `~/.cavemem` — zero breaking change for every current install.
+  3. `XDG_DATA_HOME/cavemem` whenever the var is explicitly set — on any
+     platform, not just Linux. Without the var, Linux uses the XDG default
+     `~/.local/share/cavemem`; macOS/Windows keep `~/.cavemem`.
+
+  Non-absolute env values (no leading `/`, drive letter, or `~`) are ignored —
+  treated as unset, per the XDG spec. Hooks run with cwd = the project dir, so
+  a relative `CAVEMEM_HOME` would otherwise silently fragment the store
+  per-project.
+
+  The resolution is pure `fs.existsSync` checks (no globbing) and cached per
+  process, so it's cheap on the hooks/worker hot path. `settings.dataDir`
+  still overrides the data location specifically when set explicitly in
+  settings.json — its default is now the resolved home dir above instead of a
+  hardcoded `~/.cavemem`; `.describe()` spells out the difference between the
+  two. To keep settings.json portable across machines (dotfile sync, restored
+  backups, containers), `saveSettings` omits `dataDir` from the persisted file
+  unless the user set it explicitly — the default is re-resolved on every
+  load. `saveSettings` also always writes to the resolved home now (previously
+  a custom `dataDir` would redirect the save to a location `loadSettings`
+  never reads). `cavemem doctor` / `cavemem status` already printed the
+  resolved `settings`/`dataDir` paths, so both surface the new resolution with
+  no command changes.
+
+  `@cavemem/embedding`'s musl error message no longer hardcodes
+  `~/.cavemem/settings.json`, since that path is no longer always accurate.
+
+- f2e2f49: Issue sweep: fix six bugs across config, installers, and embedding.
+
+  - **config (#25):** Correct the inverted description for `search.alpha`. The
+    ranker computes `alpha * bm25 + (1 - alpha) * cosine`, so `1 = pure BM25`
+    and `0 = pure cosine`. Doc-only — no behavior change.
+  - **installers/claude-code (#19):** Write the cavemem MCP server entry to
+    `~/.claude.json` instead of `~/.claude/settings.json`. Newer Claude Code
+    reads MCP config from `~/.claude.json`; the previous location was silently
+    ignored. Hooks continue to live in `~/.claude/settings.json`. Legacy
+    `mcpServers.cavemem` entries in `settings.json` are migrated out on
+    install.
+  - **installers/claude-code (#12):** Stop overwriting pre-existing entries in
+    `hooks.SessionStart` / `PostToolUse` / etc. The installer now appends
+    cavemem's hook to whatever is already there and writes a one-shot
+    `settings.json.pre-cavemem-<unix-ts>` backup before mutating a file with
+    prior hooks. Re-running install no longer duplicates cavemem entries.
+  - **installers/codex (#17):** Switch from `~/.codex/config.json` (which
+    Codex never read) to `~/.codex/config.toml` with the `[features]
+codex_hooks = true` flag and an `[mcp_servers.cavemem]` table. Also write
+    `~/.codex/hooks.json` with `SessionStart` / `UserPromptSubmit` /
+    `PostToolUse` / `Stop` entries so observations are actually captured.
+    Adds `smol-toml` as a dependency (bundled into the CLI dist).
+  - **installers/opencode (#14):** Drop a generated plugin at
+    `~/.config/opencode/plugins/cavemem.js` that hooks into
+    `session.created` / `session.idle` / `tool.execute.before` /
+    `tool.execute.after` and forwards to `cavemem hook run …`. Previously the
+    installer only registered an MCP server and no hooks fired at all, so
+    observations were empty. Plugin is registered in `opencode.json` and
+    uses detached `child_process.spawn` so the IDE never blocks on a hook.
+    Path migrated to OpenCode's documented global config location
+    (`~/.config/opencode/`, honoring `XDG_CONFIG_HOME`).
+  - **embedding (#20):** Detect musl libc (Alpine, musl-built Node) before
+    importing `@xenova/transformers`. The bundled `onnxruntime-node` prebuilts
+    target glibc and have segfaulted on Alpine in the wild; we now throw a
+    clean error pointing at `embedding.provider: 'none' | 'ollama'`.
+
+- 061473a: Migrate the local embedding provider from `@xenova/transformers@2` to `@huggingface/transformers@3`.
+
+  `@xenova/transformers` is deprecated and pins an old `onnxruntime-web` →
+  `onnx-proto` → `protobufjs` chain carrying multiple published `protobufjs`
+  advisories, including a critical arbitrary-code-execution issue
+  (GHSA-xq3m-2v4x-88gg). `@huggingface/transformers@3` is the maintained
+  successor: same `pipeline()` / `env` API, but resolves a current, patched
+  `protobufjs`, clearing those advisories. (The unrelated `qs` moderate
+  advisory some audits report comes from `express`/`body-parser`, not this
+  dependency chain, and is unaffected by this change.)
+
+  The v2 `quantized: true` pipeline flag was removed in v3; it is replaced with
+  `dtype: 'q8'` (int8 weights, matching the old quantized default). Embedding
+  output is unchanged — same model (`Xenova/all-MiniLM-L6-v2`), same 384 dims —
+  so existing stored vectors stay compatible and no re-embed is triggered.
+
+- Updated dependencies [dec94ef]
+- Updated dependencies [51e3608]
+- Updated dependencies [b5976a5]
+- Updated dependencies [6dc2ae5]
+- Updated dependencies [f2e2f49]
+  - @cavemem/config@0.3.0
+
 ## 0.2.0
 
 ### Minor Changes
