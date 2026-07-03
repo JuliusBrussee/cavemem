@@ -15,10 +15,7 @@
       "import": "./dist/lexicon.js"
     }
   },
-  "files": [
-    "dist",
-    "src/lexicon.json"
-  ],
+  "files": ["dist", "src/lexicon.json"],
   "scripts": {
     "build": "tsup src/index.ts src/lexicon.ts --format esm --dts --clean",
     "dev": "tsup src/index.ts src/lexicon.ts --format esm --dts --watch",
