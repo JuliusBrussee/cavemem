@@ -220,6 +220,79 @@ describe('Storage', () => {
     ).toEqual([ids[0], ids[1], ids[2]].sort());
   });
 
+  it('createSession reports whether the row was inserted or already existed', () => {
+    const first = storage.createSession({
+      id: 'dupe',
+      ide: 'claude-code',
+      cwd: null,
+      started_at: Date.now(),
+      metadata: null,
+    });
+    const second = storage.createSession({
+      id: 'dupe',
+      ide: 'claude-code',
+      cwd: null,
+      started_at: Date.now(),
+      metadata: null,
+    });
+    expect(first).toBe(true);
+    expect(second).toBe(false);
+  });
+
+  it('importObservation inserts verbatim at an explicit id and skips on repeat (used by `cavemem import`)', () => {
+    storage.createSession({
+      id: 'sess-import',
+      ide: 'claude-code',
+      cwd: null,
+      started_at: Date.now(),
+      metadata: null,
+    });
+    const row = {
+      id: 42,
+      session_id: 'sess-import',
+      kind: 'note',
+      content: 'auth mw throws 401',
+      compressed: 1 as const,
+      intensity: 'full',
+      ts: Date.now(),
+      metadata: null,
+    };
+    expect(storage.importObservation(row)).toBe(true);
+    // Re-importing the same id is a no-op, not an overwrite.
+    expect(storage.importObservation({ ...row, content: 'different content' })).toBe(false);
+    const [got] = storage.getObservations([42]);
+    expect(got?.content).toBe('auth mw throws 401');
+    // The FTS index is kept in sync via the same INSERT trigger as any
+    // other write path.
+    expect(storage.searchFts('auth').map((h) => h.id)).toContain(42);
+    // No embedding row is written, so the observation is eligible for the
+    // worker's embedding backfill loop exactly like any freshly-added row.
+    expect(storage.observationsMissingEmbeddings(10).map((o) => o.id)).toContain(42);
+  });
+
+  it('transaction rolls back every write when the callback throws', () => {
+    storage.createSession({
+      id: 'sess-tx',
+      ide: 'claude-code',
+      cwd: null,
+      started_at: Date.now(),
+      metadata: null,
+    });
+    expect(() =>
+      storage.transaction(() => {
+        storage.insertObservation({
+          session_id: 'sess-tx',
+          kind: 'note',
+          content: 'should not survive',
+          compressed: true,
+          intensity: 'full',
+        });
+        throw new Error('boom');
+      }),
+    ).toThrow('boom');
+    expect(storage.countObservations()).toBe(0);
+  });
+
   it('countObservations + countEmbeddings return correct totals', () => {
     storage.createSession({
       id: 's6',

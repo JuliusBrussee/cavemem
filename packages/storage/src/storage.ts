@@ -21,23 +21,39 @@ export class Storage {
   constructor(dbPath: string, opts: StorageOptions = {}) {
     mkdirSync(dirname(dbPath), { recursive: true });
     this.db = new Database(dbPath, opts.readonly ? { readonly: true } : {});
-    this.db.exec(SCHEMA_SQL);
+    // SCHEMA_SQL ends in a genuine `INSERT OR IGNORE`, which a read-only
+    // connection rejects outright even when the row already exists. Readonly
+    // mode is only ever used against a database an earlier writable Storage
+    // has already initialized (e.g. `cavemem export`), so skip it here.
+    if (!opts.readonly) this.db.exec(SCHEMA_SQL);
   }
 
   close(): void {
     this.db.close();
   }
 
+  /**
+   * Run `fn` inside a single SQLite transaction. If `fn` throws, every write
+   * made inside it is rolled back and the error propagates — `cavemem import`
+   * uses this so a mid-file failure leaves the database untouched.
+   */
+  transaction<T>(fn: () => T): T {
+    return this.db.transaction(fn)();
+  }
+
   // --- sessions ---
 
-  createSession(s: Omit<SessionRow, 'ended_at'>): void {
+  createSession(s: Omit<SessionRow, 'ended_at'>): boolean {
     // INSERT OR IGNORE: SessionStart re-fires on resume/clear/compact with the
     // same session_id, and we want the original row (and ended_at=null) preserved.
-    this.db
+    // The boolean return (row inserted vs already present) also gives
+    // `cavemem import` merge-by-id idempotency for free.
+    const info = this.db
       .prepare(
         'INSERT OR IGNORE INTO sessions(id, ide, cwd, started_at, metadata) VALUES (?, ?, ?, ?, ?)',
       )
       .run(s.id, s.ide, s.cwd, s.started_at, s.metadata);
+    return info.changes > 0;
   }
 
   endSession(id: string, ts = Date.now()): void {
@@ -71,6 +87,30 @@ export class Storage {
       o.metadata ? JSON.stringify(o.metadata) : null,
     );
     return Number(info.lastInsertRowid);
+  }
+
+  /**
+   * Insert an observation with an explicit id and its content verbatim —
+   * no compression is applied here. This is the sanctioned exception to
+   * "all persisted prose goes through MemoryStore, which compresses it":
+   * `cavemem import` replays rows whose `content` already passed through
+   * `@cavemem/compress` once, on the machine that produced the export.
+   * Recompressing on the target machine could produce different bytes if
+   * its `compression.intensity` setting differs from the source's, which
+   * would break byte-identical export → import → export round-trips.
+   *
+   * `INSERT OR IGNORE` on the explicit id is the merge-by-id idempotency
+   * `cavemem import` needs: re-importing the same file is a no-op. Returns
+   * true if the row was inserted, false if an observation with that id
+   * already existed (skipped).
+   */
+  importObservation(o: ObservationRow): boolean {
+    const info = this.db
+      .prepare(
+        'INSERT OR IGNORE INTO observations(id, session_id, kind, content, compressed, intensity, ts, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(o.id, o.session_id, o.kind, o.content, o.compressed, o.intensity, o.ts, o.metadata);
+    return info.changes > 0;
   }
 
   getObservations(ids: number[]): ObservationRow[] {
