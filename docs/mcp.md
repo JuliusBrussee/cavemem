@@ -79,7 +79,9 @@ Search the web via DuckDuckGo's HTML endpoint, store plain-text extracts of the 
 
 Returns: `{ query, results: [ { title, url, extract, observation_id } ], stored_ids }`
 
-Each result page is fetched with a 500 KB byte cap and the `enrich.timeoutMs` timeout, stripped to plain text, and truncated to 2000 characters. Extracts are stored through the normal write path (compressed, privacy-redacted) under a dedicated `enrich` session, with `metadata: { source: "web", url, query, note? }` for provenance. Source URLs are preserved byte-for-byte. `enrich.maxResults` (default 3, max 5) bounds how many results are fetched and stored. If the search fails or nothing can be fetched, the call returns an error and nothing is stored.
+Each result page is fetched with a 500 KB byte cap and the `enrich.timeoutMs` timeout, stripped to plain text, and truncated to 2000 characters. Extracts are stored through the normal write path (compressed, privacy-redacted) under a dedicated `enrich` session, with `metadata: { source: "web", url, query, note? }` for provenance. `query` and `note` are scrubbed (private tags + secret patterns) before they reach metadata, and source URLs are preserved byte-for-byte. `enrich.maxResults` (default 3, max 5) bounds how many results are fetched and stored. If the search fails or nothing can be fetched, the call returns an error and nothing is stored.
+
+Only public hosts are fetched: every URL and every redirect hop (followed manually, capped at 3) must be http(s) to a non-private address. Loopback, RFC1918, link-local (`169.254.0.0/16`, e.g. cloud metadata endpoints), and unique-local targets — including obfuscated numeric forms — are rejected without a request, protecting against SSRF via malicious result links or redirects.
 
 ## Contract stability
 
