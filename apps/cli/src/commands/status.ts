@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadSettings, resolveDataDir, settingsPath } from '@cavemem/config';
+import { type IdeName, installers } from '@cavemem/installers';
 import { Storage } from '@cavemem/storage';
 import type { Command } from 'commander';
 import kleur from 'kleur';
@@ -41,6 +42,15 @@ function isAlive(pid: number): boolean {
   } catch {
     return false;
   }
+}
+
+// #58: `cavemem status` used to list installed IDEs with no indication that
+// some (e.g. antigravity, bob) never capture new observations — they only
+// expose MCP query access over memory captured elsewhere. Annotate those so
+// the gap is visible instead of discovered by an empty DB.
+export function annotateIde(name: string): string {
+  const installer = installers[name as IdeName];
+  return installer?.capture === 'none' ? `${name} (query-only)` : name;
 }
 
 function fmtAgo(ts: number | null | undefined): string {
@@ -89,7 +99,7 @@ export function registerStatusCommand(program: Command): void {
         .filter(([, v]) => v)
         .map(([k]) => k);
       process.stdout.write(
-        `ides:       ${enabled.length ? enabled.join(', ') : kleur.dim('none installed — try `cavemem install`')}\n`,
+        `ides:       ${enabled.length ? enabled.map(annotateIde).join(', ') : kleur.dim('none installed — try `cavemem install`')}\n`,
       );
 
       // Embedding

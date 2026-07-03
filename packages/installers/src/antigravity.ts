@@ -14,6 +14,8 @@ function configFile(ctx: InstallContext): string {
 export const antigravity: Installer = {
   id: 'antigravity',
   label: 'Antigravity',
+  capture: 'none',
+  captureNotes: 'no hooks system — MCP query only',
   async detect(ctx: InstallContext): Promise<boolean> {
     return existsSync(join(ctx.ideConfigDir, '.gemini', 'config'));
   },

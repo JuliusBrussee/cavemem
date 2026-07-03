@@ -51,6 +51,8 @@ function legacyConfigFile(ctx: InstallContext): string {
 export const openCode: Installer = {
   id: 'opencode',
   label: 'OpenCode',
+  capture: 'full',
+  captureNotes: 'via bundled bridge plugin, not hooks.json',
   async detect(ctx: InstallContext): Promise<boolean> {
     // Prefer the modern XDG path; fall back to the legacy dot-dir.
     return existsSync(configRoot(ctx)) || existsSync(join(ctx.ideConfigDir, '.opencode'));

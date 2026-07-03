@@ -1,4 +1,10 @@
-export { installers, getInstaller, type IdeName, type Installer } from './registry.js';
+export {
+  installers,
+  getInstaller,
+  type IdeName,
+  type Installer,
+  type CaptureLevel,
+} from './registry.js';
 export {
   checkWindowsSh,
   resolveShDefault,

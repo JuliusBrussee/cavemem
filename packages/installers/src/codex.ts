@@ -65,6 +65,8 @@ function writeToml(path: string, data: Record<string, unknown>): void {
 export const codex: Installer = {
   id: 'codex',
   label: 'Codex CLI',
+  capture: 'full',
+  captureNotes: 'no SessionEnd event',
   async detect(ctx: InstallContext): Promise<boolean> {
     return existsSync(join(ctx.ideConfigDir, '.codex'));
   },

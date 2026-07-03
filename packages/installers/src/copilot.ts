@@ -62,6 +62,8 @@ function isCavememHook(entry: CopilotHookEntry, hookId: string): boolean {
 export const copilot: Installer = {
   id: 'copilot',
   label: 'GitHub Copilot',
+  capture: 'full',
+  captureNotes: 'no SessionEnd event',
   async detect(ctx: InstallContext): Promise<boolean> {
     return existsSync(join(ctx.ideConfigDir, '.copilot'));
   },

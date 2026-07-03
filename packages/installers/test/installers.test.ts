@@ -1075,3 +1075,31 @@ describe('bob installer (query-only)', () => {
     expect(await bob.detect(ctx)).toBe(true);
   });
 });
+
+// #58: users can't tell which IDEs actually capture new observations (hooks
+// fire, DB fills) vs are query-only (MCP works, nothing gets recorded). This
+// pins the `capture` metadata every installer must declare so `cavemem
+// status` and the README matrix stay accurate as installers change.
+describe('capture metadata', () => {
+  it.each([
+    ['claude-code', 'full'],
+    ['cursor', 'none'],
+    ['gemini-cli', 'none'],
+    ['opencode', 'full'],
+    ['codex', 'full'],
+    ['copilot', 'full'],
+    ['augment', 'full'],
+    ['antigravity', 'none'],
+    ['bob', 'none'],
+  ] as const)('%s declares capture: %s', (name, capture) => {
+    expect(installers[name].capture).toBe(capture);
+  });
+
+  it('every installer with capture: "none" documents why via captureNotes', () => {
+    for (const installer of Object.values(installers)) {
+      if (installer.capture === 'none') {
+        expect(installer.captureNotes).toBeTruthy();
+      }
+    }
+  });
+});

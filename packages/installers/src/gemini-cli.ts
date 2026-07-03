@@ -16,6 +16,8 @@ function settingsFile(ctx: InstallContext): string {
 export const geminiCli: Installer = {
   id: 'gemini-cli',
   label: 'Gemini CLI',
+  capture: 'none',
+  captureNotes: 'no hooks system — MCP query only',
   async detect(ctx: InstallContext): Promise<boolean> {
     return existsSync(join(ctx.ideConfigDir, '.gemini'));
   },

@@ -38,4 +38,4 @@ export function getInstaller(name: string): Installer {
   return found;
 }
 
-export type { Installer, InstallContext } from './types.js';
+export type { Installer, InstallContext, CaptureLevel } from './types.js';
