@@ -5,12 +5,14 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse as parseToml } from 'smol-toml';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { augment } from '../src/augment.js';
 import { claudeCode } from '../src/claude-code.js';
 import { codex } from '../src/codex.js';
 import { copilot } from '../src/copilot.js';
@@ -61,7 +63,7 @@ afterEach(() => {
 describe('registry', () => {
   it('exposes all expected installers', () => {
     expect(Object.keys(installers).sort()).toEqual(
-      ['claude-code', 'codex', 'cursor', 'gemini-cli', 'opencode', 'copilot'].sort(),
+      ['claude-code', 'codex', 'cursor', 'gemini-cli', 'opencode', 'copilot', 'augment'].sort(),
     );
   });
   it('getInstaller throws on unknown id', () => {
@@ -804,5 +806,142 @@ describe('copilot installer', () => {
     expect(await copilot.detect(ctx)).toBe(false);
     mkdirSync(join(home, '.copilot'));
     expect(await copilot.detect(ctx)).toBe(true);
+  });
+});
+
+describe('augment installer', () => {
+  const settingsPath = () => join(home, '.augment', 'settings.json');
+  const wrapperDir = () => join(home, '.augment', 'cavemem-hooks');
+
+  it('writes executable wrapper scripts and settings.json with hooks + mcpServers', async () => {
+    await withPlatform('linux', async () => {
+      await augment.install(ctx);
+    });
+
+    for (const hookId of ['session-start', 'post-tool-use', 'stop', 'session-end']) {
+      const wrapper = join(wrapperDir(), `${hookId}.sh`);
+      expect(existsSync(wrapper)).toBe(true);
+      expect(statSync(wrapper).mode & 0o111).toBeTruthy();
+      const body = readFileSync(wrapper, 'utf8');
+      expect(body).toContain(`hook run ${hookId} --ide augment`);
+      expect(body.startsWith('#!/bin/sh\n')).toBe(true);
+    }
+
+    const settings = JSON.parse(readFileSync(settingsPath(), 'utf8')) as {
+      hooks: Record<
+        string,
+        Array<{ matcher?: string; hooks: Array<{ command: string; metadata?: unknown }> }>
+      >;
+      mcpServers: Record<string, { command: string; args: string[] }>;
+    };
+    // Augment has no UserPromptSubmit event.
+    expect(Object.keys(settings.hooks).sort()).toEqual(
+      ['PostToolUse', 'SessionEnd', 'SessionStart', 'Stop'].sort(),
+    );
+    // Hook commands must be script-file paths, not inline command strings.
+    expect(settings.hooks.SessionStart?.[0]?.hooks?.[0]?.command).toBe(
+      join(wrapperDir(), 'session-start.sh'),
+    );
+    // Tool events require a matcher; session events must not carry one.
+    expect(settings.hooks.PostToolUse?.[0]?.matcher).toBe('.*');
+    expect(settings.hooks.SessionStart?.[0]?.matcher).toBeUndefined();
+    expect(settings.mcpServers.cavemem).toEqual({
+      command: ctx.nodeBin,
+      args: [ctx.cliPath, 'mcp'],
+    });
+  });
+
+  it('sets includeConversationData on the Stop hook only', async () => {
+    await withPlatform('linux', async () => {
+      await augment.install(ctx);
+    });
+    const settings = JSON.parse(readFileSync(settingsPath(), 'utf8')) as {
+      hooks: Record<string, Array<{ hooks: Array<{ metadata?: Record<string, unknown> }> }>>;
+    };
+    // Without this flag Augment's Stop payload has no assistant text at all,
+    // so turn-summary capture would silently store nothing.
+    expect(settings.hooks.Stop?.[0]?.hooks?.[0]?.metadata).toEqual({
+      includeConversationData: true,
+    });
+    expect(settings.hooks.SessionStart?.[0]?.hooks?.[0]?.metadata).toBeUndefined();
+    expect(settings.hooks.PostToolUse?.[0]?.hooks?.[0]?.metadata).toBeUndefined();
+  });
+
+  it('emits .cmd wrappers on win32', async () => {
+    await withPlatform('win32', async () => {
+      await augment.install(ctx);
+    });
+    const wrapper = join(wrapperDir(), 'session-start.cmd');
+    expect(existsSync(wrapper)).toBe(true);
+    const body = readFileSync(wrapper, 'utf8');
+    expect(body.startsWith('@echo off\r\n')).toBe(true);
+    expect(body).toContain('hook run session-start --ide augment');
+    const settings = JSON.parse(readFileSync(settingsPath(), 'utf8')) as {
+      hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+    };
+    expect(settings.hooks.SessionStart?.[0]?.hooks?.[0]?.command).toBe(wrapper);
+  });
+
+  it('is idempotent on re-install', async () => {
+    await withPlatform('linux', async () => {
+      await augment.install(ctx);
+      await augment.install(ctx);
+    });
+    const settings = JSON.parse(readFileSync(settingsPath(), 'utf8')) as {
+      hooks: Record<string, Array<unknown>>;
+      mcpServers: Record<string, unknown>;
+    };
+    for (const name of ['SessionStart', 'PostToolUse', 'Stop', 'SessionEnd']) {
+      expect(settings.hooks[name]?.length).toBe(1);
+    }
+    expect(Object.keys(settings.mcpServers)).toEqual(['cavemem']);
+  });
+
+  it('preserves unrelated settings on install and uninstall; removes wrapper dir', async () => {
+    mkdirSync(join(home, '.augment'), { recursive: true });
+    writeFileSync(
+      settingsPath(),
+      JSON.stringify({
+        theme: 'dark',
+        hooks: {
+          SessionStart: [{ hooks: [{ type: 'command', command: '/user/own.sh' }] }],
+          PreToolUse: [{ matcher: '.*', hooks: [{ type: 'command', command: '/user/pre.sh' }] }],
+        },
+        mcpServers: { other: { command: '/other/bin' } },
+      }),
+    );
+
+    await withPlatform('linux', async () => {
+      await augment.install(ctx);
+    });
+    const installed = JSON.parse(readFileSync(settingsPath(), 'utf8')) as {
+      theme: string;
+      hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+      mcpServers: Record<string, unknown>;
+    };
+    expect(installed.theme).toBe('dark');
+    expect(installed.hooks.SessionStart?.length).toBe(2);
+    expect(installed.hooks.SessionStart?.[0]?.hooks?.[0]?.command).toBe('/user/own.sh');
+    expect(installed.hooks.PreToolUse?.length).toBe(1);
+    expect(installed.mcpServers.other).toEqual({ command: '/other/bin' });
+
+    await withPlatform('linux', async () => {
+      await augment.uninstall(ctx);
+    });
+    const after = JSON.parse(readFileSync(settingsPath(), 'utf8')) as typeof installed;
+    expect(after.theme).toBe('dark');
+    expect(after.hooks.SessionStart?.length).toBe(1);
+    expect(after.hooks.SessionStart?.[0]?.hooks?.[0]?.command).toBe('/user/own.sh');
+    expect(after.hooks.PreToolUse?.length).toBe(1);
+    expect(after.hooks.Stop).toBeUndefined();
+    expect(after.mcpServers.other).toBeDefined();
+    expect((after.mcpServers as Record<string, unknown>).cavemem).toBeUndefined();
+    expect(existsSync(wrapperDir())).toBe(false);
+  });
+
+  it('detect returns true only when ~/.augment exists', async () => {
+    expect(await augment.detect(ctx)).toBe(false);
+    mkdirSync(join(home, '.augment'));
+    expect(await augment.detect(ctx)).toBe(true);
   });
 });

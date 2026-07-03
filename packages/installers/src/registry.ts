@@ -1,3 +1,4 @@
+import { augment } from './augment.js';
 import { claudeCode } from './claude-code.js';
 import { codex } from './codex.js';
 import { copilot } from './copilot.js';
@@ -6,7 +7,14 @@ import { geminiCli } from './gemini-cli.js';
 import { openCode } from './opencode.js';
 import type { Installer } from './types.js';
 
-export type IdeName = 'claude-code' | 'gemini-cli' | 'opencode' | 'codex' | 'cursor' | 'copilot';
+export type IdeName =
+  | 'claude-code'
+  | 'gemini-cli'
+  | 'opencode'
+  | 'codex'
+  | 'cursor'
+  | 'copilot'
+  | 'augment';
 
 export const installers: Record<IdeName, Installer> = {
   'claude-code': claudeCode,
@@ -15,6 +23,7 @@ export const installers: Record<IdeName, Installer> = {
   codex,
   cursor,
   copilot,
+  augment,
 };
 
 export function getInstaller(name: string): Installer {
