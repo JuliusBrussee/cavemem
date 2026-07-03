@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -153,5 +153,50 @@ describe('SettingsSchema dataDir default', () => {
 
     const { SettingsSchema } = await import('../src/schema.js');
     expect(SettingsSchema.parse({ dataDir: explicitDir }).dataDir).toBe(explicitDir);
+  });
+});
+
+describe('saveSettings dataDir portability', () => {
+  it('omits the machine-specific dataDir default from the persisted file', async () => {
+    setPlatform('darwin');
+    const { defaultSettings } = await import('../src/defaults.js');
+    const { saveSettings, settingsPath } = await import('../src/loader.js');
+
+    saveSettings(defaultSettings);
+    const raw = JSON.parse(readFileSync(settingsPath(), 'utf8')) as Record<string, unknown>;
+    expect(raw).not.toHaveProperty('dataDir');
+    // The rest of the settings must still round-trip.
+    expect(raw.workerPort).toBe(37777);
+  });
+
+  it('persists a dataDir the user set explicitly', async () => {
+    setPlatform('darwin');
+    const explicitDir = join(home, 'elsewhere');
+    const { SettingsSchema } = await import('../src/schema.js');
+    const { saveSettings, settingsPath } = await import('../src/loader.js');
+
+    saveSettings(SettingsSchema.parse({ dataDir: explicitDir }));
+    const raw = JSON.parse(readFileSync(settingsPath(), 'utf8')) as Record<string, unknown>;
+    expect(raw.dataDir).toBe(explicitDir);
+  });
+
+  it('setting CAVEMEM_HOME after first install moves settingsPath and dataDir together', async () => {
+    setPlatform('darwin');
+    // First "process": no env vars — settings land in the legacy dir.
+    {
+      const { defaultSettings } = await import('../src/defaults.js');
+      const { saveSettings, settingsPath } = await import('../src/loader.js');
+      saveSettings(defaultSettings);
+      expect(settingsPath()).toBe(join(home, '.cavemem', 'settings.json'));
+    }
+
+    // Second "process": CAVEMEM_HOME set — it outranks the legacy dir, so both
+    // the settings path and the effective dataDir move to the new home.
+    vi.resetModules();
+    const custom = join(home, 'relocated');
+    process.env.CAVEMEM_HOME = custom;
+    const { loadSettings, settingsPath } = await import('../src/loader.js');
+    expect(settingsPath()).toBe(join(custom, 'settings.json'));
+    expect(loadSettings().dataDir).toBe(custom);
   });
 });

@@ -24,7 +24,18 @@ export function loadSettings(path?: string): Settings {
 }
 
 export function saveSettings(settings: Settings, path?: string): void {
-  const target = path ?? settingsPath(settings.dataDir);
+  // settings.json always lives in the resolved cavemem home — dataDir only
+  // relocates the data. loadSettings reads settingsPath() with no dataDir, so
+  // saving next to a custom dataDir would orphan the file where no load ever
+  // looks.
+  const target = path ?? settingsPath();
+  // Keep the persisted file portable: the in-memory dataDir default is the
+  // resolved cavemem home — an absolute, machine-specific path. Freezing it
+  // into settings.json would break dotfile sync / restored backups and pin
+  // the resolution order at first write, so omit the key unless the user set
+  // it explicitly; loadSettings re-resolves it via the schema default.
+  const { dataDir, ...rest } = settings;
+  const persisted = dataDir === resolveCavememHome() ? rest : settings;
   mkdirSync(dirname(target), { recursive: true });
-  writeFileSync(target, `${JSON.stringify(settings, null, 2)}\n`, 'utf8');
+  writeFileSync(target, `${JSON.stringify(persisted, null, 2)}\n`, 'utf8');
 }

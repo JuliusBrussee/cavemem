@@ -14,10 +14,13 @@ export const SettingsSchema = z
       .default(() => resolveCavememHome())
       .describe(
         'Where cavemem stores its SQLite database, models, pidfile, and logs. ' +
-          'Defaults to the resolved cavemem home directory (env `CAVEMEM_HOME` > ' +
-          'existing `~/.cavemem` > XDG data dir on Linux > `~/.cavemem`) — the same ' +
-          'directory settings.json itself lives in. Setting this explicitly overrides ' +
-          'only the data location; it does not move settings.json.',
+          'Defaults to the resolved cavemem home directory (`CAVEMEM_HOME` > existing ' +
+          '`~/.cavemem` > `XDG_DATA_HOME/cavemem` on any platform when the var is set, ' +
+          'or the XDG default `~/.local/share/cavemem` on Linux > `~/.cavemem`; ' +
+          'non-absolute env values are ignored) — the same directory settings.json ' +
+          'itself lives in. Setting this explicitly overrides only the data location; ' +
+          'it does not move settings.json. Only an explicit value is persisted — the ' +
+          'default is re-resolved on every load, keeping settings.json portable.',
       ),
     workerPort: z
       .number()
