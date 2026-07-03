@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { compress, countTokens, expand, redactPrivate, tokenize } from '../src/index.js';
+import {
+  compress,
+  countTokens,
+  expand,
+  redactPrivate,
+  redactSecrets,
+  tokenize,
+} from '../src/index.js';
 
 describe('tokenize preserves technical substance', () => {
   it('preserves fenced code', () => {
@@ -86,5 +93,19 @@ describe('redactPrivate', () => {
   });
   it('handles unclosed tags defensively', () => {
     expect(redactPrivate('safe <private>oops never ends')).toBe('safe ');
+  });
+});
+
+describe('redactSecrets', () => {
+  it('redacts common API-key shapes', () => {
+    expect(redactSecrets('rotate sk-live-ABCDEF1234567890 today')).toBe('rotate [REDACTED] today');
+    expect(redactSecrets('token ghp_abcdefghij0123456789 leaked')).toBe('token [REDACTED] leaked');
+    expect(redactSecrets('key AKIAIOSFODNN7EXAMPLE in env')).toBe('key [REDACTED] in env');
+    expect(redactSecrets('slack xoxb-1234567890-abcdef')).toBe('slack [REDACTED]');
+  });
+
+  it('leaves ordinary prose and near-misses alone', () => {
+    const text = 'the task-livestream ran; ask -v for verbose; sk-1 is a chess move';
+    expect(redactSecrets(text)).toBe(text);
   });
 });
