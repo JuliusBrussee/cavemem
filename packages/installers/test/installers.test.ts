@@ -18,6 +18,7 @@ import { deepMerge } from '../src/fs-utils.js';
 import { openCode } from '../src/opencode.js';
 import { getInstaller, installers } from '../src/registry.js';
 import type { InstallContext } from '../src/types.js';
+import { checkWindowsSh, resolveShDefault } from '../src/windows-sh.js';
 
 let home: string;
 let originalHome: string | undefined;
@@ -584,5 +585,34 @@ describe('cursor installer', () => {
     await cursor.uninstall(ctx);
     const after = JSON.parse(readFileSync(p, 'utf8')) as typeof cfg;
     expect(after.mcpServers.cavemem).toBeUndefined();
+  });
+});
+
+describe('checkWindowsSh (#56)', () => {
+  it('warns when sh is missing on win32', () => {
+    const warning = checkWindowsSh({ platform: 'win32', resolveSh: () => false });
+    expect(warning).toContain('sh` not found on PATH');
+    expect(warning).toContain('Git\\bin');
+    expect(warning).toContain('where.exe sh');
+  });
+
+  it('returns null when sh resolves on win32', () => {
+    expect(checkWindowsSh({ platform: 'win32', resolveSh: () => true })).toBeNull();
+  });
+
+  it('is a no-op on non-Windows platforms, even if the resolver would fail', () => {
+    const resolveSh = () => false;
+    expect(checkWindowsSh({ platform: 'darwin', resolveSh })).toBeNull();
+    expect(checkWindowsSh({ platform: 'linux', resolveSh })).toBeNull();
+  });
+
+  it('defaults to process.platform and resolveShDefault when no options are given', () => {
+    // On the non-Windows machines this suite runs on, the default platform
+    // branch is a no-op regardless of whether `sh` is actually resolvable.
+    expect(checkWindowsSh()).toBeNull();
+  });
+
+  it('resolveShDefault returns a boolean without throwing', () => {
+    expect(typeof resolveShDefault()).toBe('boolean');
   });
 });

@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadSettings, resolveDataDir, settingsPath } from '@cavemem/config';
+import { checkWindowsSh } from '@cavemem/installers';
 import { Storage } from '@cavemem/storage';
 import type { Command } from 'commander';
 import kleur from 'kleur';
@@ -38,5 +39,13 @@ export function registerDoctorCommand(program: Command): void {
       process.stdout.write(
         `ides:     ${enabled.length ? enabled.join(', ') : kleur.dim('none')}\n`,
       );
+
+      // win32 only — checkWindowsSh() returns null (no-op) on every other platform.
+      const shWarning = checkWindowsSh();
+      if (shWarning) {
+        process.stdout.write(`sh:       ${kleur.red('not found on PATH')}\n`);
+        process.stdout.write(`\n${kleur.yellow(shWarning)}\n`);
+        process.exitCode = 1;
+      }
     });
 }

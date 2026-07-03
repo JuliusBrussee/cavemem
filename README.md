@@ -50,6 +50,23 @@ cavemem viewer                     # open http://127.0.0.1:37777
 
 No daemon to start. Hooks write synchronously. A local worker auto-spawns in the background on the first hook to build embeddings and serve the viewer; it self-exits when idle (set `embedding.idleShutdownMs` to `0` to keep it running until killed). Disable auto-spawn — and with it the HTTP listener — with `cavemem config set embedding.autoStart false`.
 
+### Windows
+
+Claude Code runs hook commands through `sh -c` even on Windows. If Git for Windows' `Git\bin` isn't
+on your user `Path`, `sh` doesn't resolve, hooks fail silently, and capture quietly stops — `cavemem
+doctor`/`status` keep reporting healthy because the failure never reaches the CLI. Add
+`C:\Program Files\Git\bin` (or `<scoop dir>\apps\git\current\usr\bin` for a Scoop install) to your
+user `Path`, then verify with `where.exe sh`. `cavemem doctor` and `cavemem install` both check
+`sh` resolvability on win32 and print a warning if it's missing.
+
+Claude Code's hooks docs also describe a `shell` field (`"bash"` / `"powershell"`) and a shell-free
+`args` exec form. We looked at emitting either instead of the plain `sh`-shaped command string, but
+held off: we can't verify those fields against every Claude Code version in the wild, and the
+current command has no shell metacharacters, so it already tokenizes the same way whether Claude
+Code runs it through `sh` or falls back to PowerShell. Once there's a way to gate on a minimum
+Claude Code version, switching to the shell-free `args` form would drop the `sh` dependency
+entirely.
+
 ---
 
 ## How it works

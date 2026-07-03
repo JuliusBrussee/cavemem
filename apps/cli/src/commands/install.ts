@@ -7,10 +7,16 @@ import {
   saveSettings,
   settingsPath,
 } from '@cavemem/config';
-import { type IdeName, getInstaller, installers } from '@cavemem/installers';
+import { type IdeName, checkWindowsSh, getInstaller, installers } from '@cavemem/installers';
 import type { Command } from 'commander';
 import kleur from 'kleur';
 import { resolveCliPath } from '../util/resolve.js';
+
+// Hooks run through Claude Code's own `sh -c` wrapper on Windows (#56).
+// Codex hooks aren't available on Windows at all, and the other installers
+// have no hooks (MCP-only) or spawn node directly (opencode), so claude-code
+// is the only IDE that needs this preflight today.
+const SH_DEPENDENT_IDES = new Set<IdeName>(['claude-code']);
 
 export function registerInstallCommand(program: Command): void {
   program
@@ -41,6 +47,16 @@ export function registerInstallCommand(program: Command): void {
       for (const m of msgs) process.stdout.write(`${kleur.green('✓')} ${m}\n`);
       settings.ides[name] = true;
       saveSettings(settings);
+
+      // Non-fatal — install proceeds either way. The user may fix PATH after.
+      if (SH_DEPENDENT_IDES.has(name)) {
+        const shWarning = checkWindowsSh();
+        if (shWarning) {
+          process.stdout.write(
+            `\n${kleur.red(kleur.bold('warning:'))} ${kleur.yellow(shWarning)}\n`,
+          );
+        }
+      }
 
       const model = settings.embedding.model;
       const provider = settings.embedding.provider;
