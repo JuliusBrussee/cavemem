@@ -47,7 +47,10 @@ function openDb(dbPath: string, opts: { readonly?: boolean } = {}): DbHandle {
   if (isBun) {
     // bun:sqlite is a Bun built-in; not available on Node.
     const { Database: BunDb } = _req('bun:sqlite') as {
-      Database: new (path: string, opts?: { readonly?: boolean }) => {
+      Database: new (
+        path: string,
+        opts?: { readonly?: boolean },
+      ) => {
         exec(sql: string): void;
         prepare(sql: string): {
           run(...a: unknown[]): { lastInsertRowid: number; changes: number };
@@ -75,7 +78,9 @@ function openDb(dbPath: string, opts: { readonly?: boolean } = {}): DbHandle {
   const Db = _req('better-sqlite3') as Bs3Constructor;
   const db = new Db(dbPath, opts.readonly ? { readonly: true } : {});
   return {
-    runSchema: (sql) => { db.exec(sql); },
+    runSchema: (sql) => {
+      db.exec(sql);
+    },
     prepare: (sql) => db.prepare(sql) as unknown as Stmt,
     close: () => db.close(),
   };
@@ -199,6 +204,12 @@ export class Storage {
   }
 
   // --- search (BM25 via FTS5) ---
+
+  // Rebuilds the FTS5 index from the observations table. Goes through
+  // prepare/run (not runSchema/exec) so it works identically on both backends.
+  rebuildFts(): void {
+    this.db.prepare("INSERT INTO observations_fts(observations_fts) VALUES('rebuild');").run();
+  }
 
   searchFts(query: string, limit = 10): SearchHit[] {
     if (!query.trim()) return [];

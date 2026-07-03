@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeBunGet, sanitizeMatch, isBun } from '../src/storage.js';
+import { isBun, normalizeBunGet, sanitizeMatch } from '../src/storage.js';
 
 describe('sanitizeMatch', () => {
   it('wraps each term in double quotes', () => {
@@ -46,7 +46,8 @@ describe('normalizeBunGet', () => {
 
 describe('isBun', () => {
   it('correctly detects the runtime environment', () => {
-    const actuallyBun = typeof (globalThis as any).Bun !== 'undefined' || !!(globalThis as any).process?.versions?.bun;
+    const g = globalThis as { Bun?: unknown; process?: { versions?: { bun?: string } } };
+    const actuallyBun = typeof g.Bun !== 'undefined' || !!g.process?.versions?.bun;
     expect(isBun).toBe(actuallyBun);
   });
 });
