@@ -52,3 +52,19 @@ describe('MemoryStore.addObservation — secret redaction (#49)', () => {
     store.close();
   });
 });
+
+describe('MemoryStore.addSummary — secret redaction (#49)', () => {
+  it('scrubs secrets in summaries before compression', () => {
+    const store = new MemoryStore({ dbPath: join(dir, 'c.db'), settings: defaultSettings });
+    store.startSession({ id: 's3', ide: 'test', cwd: '/tmp' });
+    store.addSummary({
+      session_id: 's3',
+      scope: 'turn',
+      content: 'Deployed with token: ghp_1234567890abcdefghijKLMNOPQRST as discussed.',
+    });
+    const [row] = store.storage.listSummaries('s3');
+    expect(row?.content).not.toContain('ghp_1234567890abcdefghijKLMNOPQRST');
+    expect(expand(row?.content ?? '')).toContain('[REDACTED]');
+    store.close();
+  });
+});

@@ -68,7 +68,10 @@ export class MemoryStore {
   }
 
   addSummary(p: { session_id: string; scope: 'turn' | 'session'; content: string }): number {
-    const redacted = redactPrivate(p.content);
+    let redacted = redactPrivate(p.content);
+    // Summaries echo assistant turn text, which routinely repeats credentials
+    // the agent just read — scrub them like observations.
+    if (this.settings.privacy.redactSecrets) redacted = redactSecrets(redacted);
     this.ensureSession(p.session_id);
     const intensity = this.settings.compression.intensity;
     const out = compress(redacted, { intensity });

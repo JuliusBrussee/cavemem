@@ -129,6 +129,24 @@ describe('redactSecrets', () => {
     expect(redactSecrets("secret = 'sup3rSecretValue'")).toBe("secret = '[REDACTED]'");
   });
 
+  it('redacts prefixed env-var key names', () => {
+    expect(redactSecrets('STRIPE_SECRET_KEY=abcdefgh12345678')).toBe(
+      'STRIPE_SECRET_KEY=[REDACTED]',
+    );
+    expect(redactSecrets('DATABASE_PASSWORD=hunter2hunter2')).toBe('DATABASE_PASSWORD=[REDACTED]');
+    expect(redactSecrets('MY_API_KEY=abcd1234efgh5678')).toBe('MY_API_KEY=[REDACTED]');
+    expect(redactSecrets('aws_secret_access_key = wJalrXUtnFEMIK7MDENGbPxRfiCY12')).toBe(
+      'aws_secret_access_key = [REDACTED]',
+    );
+  });
+
+  it('leaves camelCase identifiers that merely contain secret words untouched', () => {
+    const a = 'mySecretName = "abcd1234efgh"';
+    expect(redactSecrets(a)).toBe(a);
+    const b = 'const cacheKey = deriveCacheKey();';
+    expect(redactSecrets(b)).toBe(b);
+  });
+
   it('redacts a PEM private key block', () => {
     const pem =
       '-----BEGIN RSA PRIVATE KEY-----\nMIIBOgIBAAJBAKj34GkxFhD90vcNLYLInFEX\n-----END RSA PRIVATE KEY-----';

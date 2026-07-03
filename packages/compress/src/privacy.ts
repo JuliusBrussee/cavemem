@@ -18,11 +18,15 @@ const BEARER_RE = /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/g;
 const OPENAI_KEY_RE = /\bsk-[A-Za-z0-9_-]{16,}/g;
 const AWS_KEY_RE = /\bAKIA[0-9A-Z]{16}\b/g;
 const GITHUB_TOKEN_RE = /\bgh[pousr]_[A-Za-z0-9]{20,}/g;
-// Generic `key = value` / `key: value` assignments. The value alternates
-// quoted (") / quoted (') / bare so the closing quote is never swallowed by
-// the bare \S{8,} branch.
+// `key = value` / `key: value` assignments whose key name ends in a
+// recognised secret word. The optional [\w-]* prefix catches env-var style
+// names (STRIPE_SECRET_KEY, DATABASE_PASSWORD, aws_secret_access_key) —
+// a plain \b never fires between word chars, so an anchored alternation
+// alone misses them. Bare `key` requires a preceding `_`/`-` so camelCase
+// identifiers like `cacheKey` never match. The value alternates quoted (") /
+// quoted (') / bare so the closing quote is never swallowed by \S{8,}.
 const ASSIGNMENT_RE =
-  /\b(api[_-]?key|secret|token|password|passwd|authorization)(\s*[=:]\s*)(?:"([^"\s]{8,})"|'([^'\s]{8,})'|(\S{8,}))/gi;
+  /\b([\w-]*(?:api[_-]?key|secret|token|password|passwd|authorization|[_-]key))(\s*[=:]\s*)(?:"([^"\s]{8,})"|'([^'\s]{8,})'|(\S{8,}))/gi;
 
 /**
  * True if `value` is secret-shaped enough to redact: long enough, and not
