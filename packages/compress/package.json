@@ -1,6 +1,7 @@
 {
   "name": "@cavemem/compress",
   "version": "0.3.0",
+  "private": true,
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
