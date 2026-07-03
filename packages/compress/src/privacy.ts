@@ -18,6 +18,8 @@ const BEARER_RE = /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/g;
 const OPENAI_KEY_RE = /\bsk-[A-Za-z0-9_-]{16,}/g;
 const AWS_KEY_RE = /\bAKIA[0-9A-Z]{16}\b/g;
 const GITHUB_TOKEN_RE = /\bgh[pousr]_[A-Za-z0-9]{20,}/g;
+const GITHUB_FINE_PAT_RE = /\bgithub_pat_[A-Za-z0-9_]{20,128}\b/g;
+const SLACK_TOKEN_RE = /\bxox[baprs]-[A-Za-z0-9-]{10,72}\b/g;
 // `key = value` / `key: value` assignments whose key name ends in a
 // recognised secret word. The optional [\w-]* prefix catches env-var style
 // names (STRIPE_SECRET_KEY, DATABASE_PASSWORD, aws_secret_access_key) —
@@ -52,6 +54,8 @@ export function redactSecrets(text: string): string {
   out = out.replace(OPENAI_KEY_RE, '[REDACTED]');
   out = out.replace(AWS_KEY_RE, '[REDACTED]');
   out = out.replace(GITHUB_TOKEN_RE, '[REDACTED]');
+  out = out.replace(GITHUB_FINE_PAT_RE, '[REDACTED]');
+  out = out.replace(SLACK_TOKEN_RE, '[REDACTED]');
   out = out.replace(ASSIGNMENT_RE, (match, key, sep, dq, sq, bare) => {
     const value: string = dq ?? sq ?? bare;
     if (!looksSecretish(value)) return match;

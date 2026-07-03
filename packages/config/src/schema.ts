@@ -135,6 +135,32 @@ export const SettingsSchema = z
       })
       .default({ excludeTools: [], includeTools: [] })
       .describe('Per-tool capture allowlist/denylist.'),
+    enrich: z
+      .object({
+        enabled: z
+          .boolean()
+          .default(false)
+          .describe(
+            'Opt-in web-search enrichment. Off by default — when off, the enrich MCP tool is not registered and no network call is ever made.',
+          ),
+        maxResults: z
+          .number()
+          .int()
+          .positive()
+          .max(5)
+          .default(3)
+          .describe('Max web results fetched and stored per enrich call (max 5).'),
+        timeoutMs: z
+          .number()
+          .int()
+          .positive()
+          .default(8000)
+          .describe(
+            'Per-request timeout in milliseconds for the DuckDuckGo search and each page fetch.',
+          ),
+      })
+      .default({ enabled: false, maxResults: 3, timeoutMs: 8000 })
+      .describe('Web-search enrichment (phase 1: DuckDuckGo HTML endpoint, no API-key backends).'),
     ides: z
       .record(z.string(), z.boolean())
       .default({})

@@ -174,4 +174,16 @@ describe('redactSecrets', () => {
     const src = 'password: forgotten';
     expect(redactSecrets(src)).toBe(src);
   });
+
+  it('redacts common API-key shapes', () => {
+    expect(redactSecrets('rotate sk-live-ABCDEF1234567890 today')).toBe('rotate [REDACTED] today');
+    expect(redactSecrets('token ghp_abcdefghij0123456789 leaked')).toBe('token [REDACTED] leaked');
+    expect(redactSecrets('key AKIAIOSFODNN7EXAMPLE in env')).toBe('key [REDACTED] in env');
+    expect(redactSecrets('slack xoxb-1234567890-abcdef')).toBe('slack [REDACTED]');
+  });
+
+  it('leaves ordinary prose and near-misses alone', () => {
+    const text = 'the task-livestream ran; ask -v for verbose; sk-1 is a chess move';
+    expect(redactSecrets(text)).toBe(text);
+  });
 });

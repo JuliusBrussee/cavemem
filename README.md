@@ -121,6 +121,9 @@ Progressive disclosure: `search` and `timeline` return compact results; `get_obs
 | `timeline(session_id, around_id?, limit?)` | `[{id, kind, ts}]` |
 | `get_observations(ids[], expand?)` | Full bodies, expanded by default |
 | `list_sessions(limit?)` | `[{id, ide, cwd, started_at, ended_at}]` |
+| `enrich(query, note?)` | `{results: [{title, url, extract, observation_id}]}` — **opt-in** web enrichment |
+
+`enrich` is off by default. When `enrich.enabled` is `false` the tool is not registered and cavemem makes no network call, ever. When enabled, it searches DuckDuckGo, stores compressed plain-text extracts as observations (tagged `source: web` + URL for provenance), and returns them.
 
 ---
 
@@ -152,6 +155,7 @@ Run `cavemem doctor` or `cavemem status` to see which directory is actually in u
 | `privacy.redactSecrets` | `true` | Scrub secret-shaped substrings (API keys, tokens, passwords) with `[REDACTED]` |
 | `capture.excludeTools` | `[]` | Tool names/globs never captured; wins over `includeTools` |
 | `capture.includeTools` | `[]` | If non-empty, only these tool names/globs are captured |
+| `enrich.enabled` | `false` | Opt-in web enrichment tool |
 
 Content inside `<private>...</private>` is stripped before write. Paths matching `excludePatterns` are never captured into memory, whether they appear in a tool's `file_path`/`path`/`notebook_path` field or embedded in a command string. The worker binds to `127.0.0.1` only, checks the Host/Origin headers on every request, and requires a local bearer token (`<dataDir>/worker-token`, mode `0600`) on `/api/*`.
 
