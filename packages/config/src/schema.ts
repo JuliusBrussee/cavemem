@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { resolveCavememHome } from './home.js';
 
 export const CompressionIntensity = z.enum(['lite', 'full', 'ultra']);
 export type CompressionIntensity = z.infer<typeof CompressionIntensity>;
@@ -10,8 +11,14 @@ export const SettingsSchema = z
   .object({
     dataDir: z
       .string()
-      .default('~/.cavemem')
-      .describe('Where cavemem stores its SQLite database, models, pidfile, and logs.'),
+      .default(() => resolveCavememHome())
+      .describe(
+        'Where cavemem stores its SQLite database, models, pidfile, and logs. ' +
+          'Defaults to the resolved cavemem home directory (env `CAVEMEM_HOME` > ' +
+          'existing `~/.cavemem` > XDG data dir on Linux > `~/.cavemem`) — the same ' +
+          'directory settings.json itself lives in. Setting this explicitly overrides ' +
+          'only the data location; it does not move settings.json.',
+      ),
     workerPort: z
       .number()
       .int()

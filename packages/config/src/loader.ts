@@ -1,18 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join } from 'node:path';
 import { defaultSettings } from './defaults.js';
+import { resolveCavememHome, resolveDataDir } from './home.js';
 import { type Settings, SettingsSchema } from './schema.js';
 
-const DEFAULT_DIR = '.cavemem';
-
-export function resolveDataDir(raw: string): string {
-  if (raw.startsWith('~')) return join(homedir(), raw.slice(1).replace(/^\/+/, ''));
-  return resolve(raw);
-}
+export { resolveDataDir } from './home.js';
 
 export function settingsPath(dataDir?: string): string {
-  const dir = resolveDataDir(dataDir ?? join(homedir(), DEFAULT_DIR));
+  const dir = resolveDataDir(dataDir ?? resolveCavememHome());
   return join(dir, 'settings.json');
 }
 
