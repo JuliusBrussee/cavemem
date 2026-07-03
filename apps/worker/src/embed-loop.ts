@@ -56,7 +56,10 @@ export function startEmbedLoop(opts: {
   const { store, embedder, settings } = opts;
   const idleTickMs = opts.idleTickMs ?? 2000;
   const batchSize = settings.embedding.batchSize;
-  const idleShutdownMs = settings.embedding.idleShutdownMs;
+  // 0 (or negative, clamped to 0 here as a defensive second guard on top of
+  // the config schema's own clamp) disables idle shutdown — the worker runs
+  // until killed.
+  const idleShutdownMs = Math.max(0, settings.embedding.idleShutdownMs);
 
   // Nuke stale-model embeddings once on startup.
   const dropped = store.storage.dropEmbeddingsWhereModelNot(embedder.model);
@@ -134,7 +137,7 @@ export function startEmbedLoop(opts: {
       const now = Date.now();
       const noWork = now - idleSince;
       const noTraffic = now - state.lastHttpAt;
-      if (noWork > idleShutdownMs && noTraffic > idleShutdownMs) {
+      if (idleShutdownMs > 0 && noWork > idleShutdownMs && noTraffic > idleShutdownMs) {
         process.stderr.write(
           `[cavemem worker] idle ${Math.round(noWork / 1000)}s + no traffic ${Math.round(
             noTraffic / 1000,

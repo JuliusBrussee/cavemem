@@ -32,7 +32,7 @@ Cross-agent persistent memory for coding assistants. Hooks fire at session bound
 - **Progressive MCP retrieval.** `search`, `timeline`, `get_observations` — agents filter before fetching.
 - **Hybrid search.** SQLite FTS5 keyword + local vector index, combined with a tunable ranker.
 - **Local by default.** No network calls. Optional remote embedding providers via config.
-- **Web viewer.** Read-only UI at `http://localhost:37777` for browsing sessions in human-readable form.
+- **Web viewer.** Read-only UI at `http://localhost:37777` for browsing sessions in human-readable form. Token-protected: the worker generates a local bearer token on first start and injects it into the served page, so `cavemem viewer` still opens with zero friction while `/api/*` rejects requests without it.
 - **Cross-IDE installers.** Claude Code, Gemini CLI, OpenCode, Codex, Cursor — one command each.
 - **Privacy-aware.** `<private>...</private>` stripped at write boundary. Path globs exclude whole directories.
 
@@ -48,7 +48,7 @@ cavemem status                     # see wiring + embedding backfill
 cavemem viewer                     # open http://127.0.0.1:37777
 ```
 
-No daemon to start. Hooks write synchronously. A local worker auto-spawns in the background on the first hook to build embeddings; it self-exits when idle. Disable with `cavemem config set embedding.autoStart false`.
+No daemon to start. Hooks write synchronously. A local worker auto-spawns in the background on the first hook to build embeddings and serve the viewer; it self-exits when idle (set `embedding.idleShutdownMs` to `0` to keep it running until killed). Disable auto-spawn — and with it the HTTP listener — with `cavemem config set embedding.autoStart false`.
 
 ---
 
@@ -119,7 +119,7 @@ Progressive disclosure: `search` and `timeline` return compact results; `get_obs
 | `search.defaultLimit` | `10` | Default result count |
 | `privacy.excludePatterns` | `[]` | Paths never captured |
 
-Content inside `<private>...</private>` is stripped before write. Paths matching `excludePatterns` are never read. The worker binds to `127.0.0.1` only.
+Content inside `<private>...</private>` is stripped before write. Paths matching `excludePatterns` are never read. The worker binds to `127.0.0.1` only, checks the Host/Origin headers on every request, and requires a local bearer token (`<dataDir>/worker-token`, mode `0600`) on `/api/*`.
 
 ---
 

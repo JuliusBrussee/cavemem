@@ -9,15 +9,31 @@ import { createEmbedder } from '@cavemem/embedding';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { type EmbedLoopHandle, startEmbedLoop, stateFilePath } from './embed-loop.js';
+import { bearerAuth, getOrCreateToken, hostAllowlist, originCheck } from './security.js';
 import { renderIndex, renderSession } from './viewer.js';
 
-export function buildApp(store: MemoryStore, loop?: EmbedLoopHandle): Hono {
-  const app = new Hono();
+export interface BuildAppOptions {
+  /** Port the worker binds to — used by the Host/Origin allowlist checks. */
+  port: number;
+  /** Bearer token required on /api/*; also injected into served HTML. */
+  token: string;
+  loop?: EmbedLoopHandle | undefined;
+}
 
+export function buildApp(store: MemoryStore, opts: BuildAppOptions): Hono {
+  const app = new Hono();
+  const { port, token, loop } = opts;
+
+  // Host/Origin checks apply to every route (kills DNS rebinding + CSRF from
+  // browser pages); the bearer token is scoped to /api/* only so the plain
+  // HTML pages keep loading with zero user friction.
+  app.use('*', hostAllowlist(port));
+  app.use('*', originCheck(port));
   app.use('*', async (_c, next) => {
     loop?.touch();
     await next();
   });
+  app.use('/api/*', bearerAuth(token));
 
   app.get('/healthz', (c) => c.json({ ok: true }));
 
@@ -44,7 +60,7 @@ export function buildApp(store: MemoryStore, loop?: EmbedLoopHandle): Hono {
     return c.json(await store.search(q, limit));
   });
 
-  app.get('/', (c) => c.html(renderIndex(store.storage.listSessions(50))));
+  app.get('/', (c) => c.html(renderIndex(store.storage.listSessions(50), token)));
   app.get('/sessions/:id', (c) => {
     const id = c.req.param('id');
     const session = store.storage.getSession(id);
@@ -54,6 +70,7 @@ export function buildApp(store: MemoryStore, loop?: EmbedLoopHandle): Hono {
       renderSession(
         session,
         obs.map((r) => ({ ...r, content: expand(r.content) })),
+        token,
       ),
     );
   });
@@ -147,7 +164,8 @@ export async function start(): Promise<void> {
     );
   }
 
-  const app = buildApp(store, loop);
+  const token = getOrCreateToken(settings);
+  const app = buildApp(store, { port: settings.workerPort, token, loop });
   servers.push(serve({ fetch: app.fetch, port: settings.workerPort, hostname: '127.0.0.1' }));
   process.stderr.write(
     `[cavemem worker] listening on http://127.0.0.1:${settings.workerPort} (pid ${process.pid})\n`,
