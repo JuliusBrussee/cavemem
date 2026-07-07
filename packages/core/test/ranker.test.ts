@@ -33,4 +33,14 @@ describe('hybridRank', () => {
     );
     expect(ranked[0]?.id).toBe(1);
   });
+  it('handles corpus-sized candidate sets without stack overflow', () => {
+    const items = Array.from({ length: 150_000 }, (_, i) => ({
+      id: i,
+      bm25: Math.sin(i),
+      cosine: Math.cos(i),
+    }));
+    const ranked = hybridRank(items, 0.5);
+    expect(ranked).toHaveLength(150_000);
+    expect(ranked[0]!.score).toBeGreaterThanOrEqual(ranked[149_999]!.score);
+  });
 });
