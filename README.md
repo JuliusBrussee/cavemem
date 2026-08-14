@@ -12,14 +12,12 @@
 
 </div>
 
-<p align="center">
-  <strong>🪨 Caveman Ecosystem</strong> &nbsp;·&nbsp;
-  <a href="https://github.com/JuliusBrussee/caveman">caveman</a> <em>talk less</em> &nbsp;·&nbsp;
-  <strong>cavemem</strong> <em>remember more</em> <sub>(you are here)</sub> &nbsp;·&nbsp;
-  <a href="https://github.com/JuliusBrussee/cavekit">cavekit</a> <em>build better</em> &nbsp;·&nbsp;
-  <a href="https://github.com/JuliusBrussee/finetune-caveman">cavegemma</a> <em>weights remember</em>
-</p>
-
+> **Status: frozen (August 2026).** cavemem is no longer in active development.
+> Everything below still installs and works, but expect no new features or
+> fixes. Its compressed-memory core lives on inside
+> [caveman](https://github.com/JuliusBrussee/caveman) — the actively developed
+> home of the family, alongside
+> [caveman-browse](https://github.com/JuliusBrussee/caveman-browse).
 
 ---
 
