@@ -9,10 +9,24 @@ export interface RankItem {
  * alpha=1 → pure keyword, alpha=0 → pure vector.
  */
 export function hybridRank(items: RankItem[], alpha: number): Array<{ id: number; score: number }> {
-  const bm25s = items.map((x) => x.bm25 ?? 0);
-  const cosines = items.map((x) => x.cosine ?? 0);
-  const [bmin, bmax] = [Math.min(...bm25s), Math.max(...bm25s)];
-  const [cmin, cmax] = [Math.min(...cosines), Math.max(...cosines)];
+  // Spreading large arrays into Math.min/max overflows the call stack once the candidate
+  // set passes V8's argument limit (~100k items) — search() feeds the whole corpus in, so
+  // large stores crashed with RangeError. Compute extrema with a loop instead.
+  let bmin = Infinity;
+  let bmax = -Infinity;
+  let cmin = Infinity;
+  let cmax = -Infinity;
+  for (const x of items) {
+    const b = x.bm25 ?? 0;
+    const c = x.cosine ?? 0;
+    if (b < bmin) bmin = b;
+    if (b > bmax) bmax = b;
+    if (c < cmin) cmin = c;
+    if (c > cmax) cmax = c;
+  }
+  if (items.length === 0) {
+    bmin = bmax = cmin = cmax = 0;
+  }
   const bRange = bmax - bmin || 1;
   const cRange = cmax - cmin || 1;
 
