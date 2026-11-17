@@ -35,7 +35,7 @@ export const SettingsSchema = z
     compression: z
       .object({
         intensity: CompressionIntensity.default('full').describe(
-          'Caveman grammar intensity. lite ≈ 30% savings, full ≈ 60%, ultra ≈ 75%.',
+          'Caveman grammar intensity: lite, full or ultra.',
         ),
         expandForModel: z
           .boolean()

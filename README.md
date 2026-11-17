@@ -21,7 +21,7 @@
 
 ---
 
-Cross-agent persistent memory for coding assistants. Hooks fire at session boundaries, compress observations with the caveman grammar (~75% fewer prose tokens, code and paths preserved byte-for-byte), and write to local SQLite. Agents query their own history through three MCP tools. No network. No cloud.
+Cross-agent persistent memory for coding assistants. Hooks fire at session boundaries, compress observations with the caveman grammar (at least 30% fewer tokens on the test corpus, code and paths preserved byte-for-byte), and write to local SQLite. Agents query their own history through three MCP tools. No network. No cloud.
 
 **Supports:** Claude Code · OpenCode · Codex · GitHub Copilot · Augment Code · Cursor (query-only) · Gemini CLI (query-only) · Antigravity (query-only) · IBM Bob (query-only)
 
@@ -187,7 +187,7 @@ Four tools. One philosophy: **agent do more with less**.
 
 | Repo | What | One-liner |
 |------|------|-----------|
-| [**caveman**](https://github.com/JuliusBrussee/caveman) | Output compression skill | *why use many token when few do trick* — ~75% fewer output tokens across Claude Code, Cursor, Gemini, Codex |
+| [**caveman**](https://github.com/JuliusBrussee/caveman) | Output compression skill | *why use many token when few do trick* |
 | [**cavemem**](https://github.com/JuliusBrussee/cavemem) *(you are here)* | Cross-agent persistent memory | *why agent forget when agent can remember* — compressed SQLite + MCP, local by default |
 | [**cavekit**](https://github.com/JuliusBrussee/cavekit) | Spec-driven autonomous build loop | *why agent guess when agent can know* — natural language → kits → parallel build → verified |
 | [**cavegemma**](https://github.com/JuliusBrussee/finetune-caveman) | Gemma 4 31B fine-tuned on caveman pairs | *why prompt every turn when weight remember* — LoRA + merged bf16 on HF, no system prompt needed |
